@@ -19,7 +19,9 @@ function invoke(payload, timeout = 600000) {
     return new Promise((resolve, reject) => {
         let python;
         try { python = pythonPath(); } catch (error) { reject(error); return; }
-        const child = spawn(python, ['-u', path.join(__dirname, 'edge_tts_bridge.py')], {
+        const packagedBridge = process.resourcesPath && path.join(process.resourcesPath, 'edge-tts', 'edge_tts_bridge.py');
+        const bridge = packagedBridge && fs.existsSync(packagedBridge) ? packagedBridge : path.join(__dirname, 'edge_tts_bridge.py');
+        const child = spawn(python, ['-u', bridge], {
             windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, PYTHONUTF8: '1' },
         });
         child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');

@@ -6005,6 +6005,12 @@ class ReelsOverlayPanel {
                 const loadedEnd = Number(clone.end);
                 clone.start = Number.isFinite(loadedStart) ? Math.max(0, loadedStart) : 0;
                 clone.end = Number.isFinite(loadedEnd) && loadedEnd >= clone.start ? loadedEnd : 9999;
+            // Auto-stop scroll presets use the receiving task's duration, not the template's.
+            // Explicit display ranges and manually timed overlays keep their saved timing.
+            if (clone.type === 'scroll' && clone.scroll_auto_stop === true
+                && !(Array.isArray(clone.display_ranges) && clone.display_ranges.length)) {
+                clone.end = 9999;
+            }
 
                 mgr.overlays.push(clone);
                 newlyAdded.push(clone);
@@ -6121,6 +6127,12 @@ class ReelsOverlayPanel {
             const loadedEnd = Number(clone.end);
             clone.start = Number.isFinite(loadedStart) ? Math.max(0, loadedStart) : 0;
             clone.end = Number.isFinite(loadedEnd) && loadedEnd >= clone.start ? loadedEnd : 9999;
+            // Auto-stop scroll presets use the receiving task's duration, not the template's.
+            // Explicit display ranges and manually timed overlays keep their saved timing.
+            if (clone.type === 'scroll' && clone.scroll_auto_stop === true
+                && !(Array.isArray(clone.display_ranges) && clone.display_ranges.length)) {
+                clone.end = 9999;
+            }
             // For non-fixed layers, preserve text from corresponding old overlay.
             // Prefer same index, then same type, then any remaining text layer.
             if (!clone.fixed_text) {
@@ -7314,6 +7326,12 @@ class ReelsOverlayPanel {
                 const loadedEnd = Number(clone.end);
                 clone.start = Number.isFinite(loadedStart) ? Math.max(0, loadedStart) : 0;
                 clone.end = Number.isFinite(loadedEnd) && loadedEnd >= clone.start ? loadedEnd : 9999;
+            // Auto-stop scroll presets use the receiving task's duration, not the template's.
+            // Explicit display ranges and manually timed overlays keep their saved timing.
+            if (clone.type === 'scroll' && clone.scroll_auto_stop === true
+                && !(Array.isArray(clone.display_ranges) && clone.display_ranges.length)) {
+                clone.end = 9999;
+            }
 
                 mgr.overlays.push(clone);
                 newlyAdded.push(clone);
@@ -7431,6 +7449,12 @@ class ReelsOverlayPanel {
             const loadedEnd = Number(clone.end);
             clone.start = Number.isFinite(loadedStart) ? Math.max(0, loadedStart) : 0;
             clone.end = Number.isFinite(loadedEnd) && loadedEnd >= clone.start ? loadedEnd : 9999;
+            // Auto-stop scroll presets use the receiving task's duration, not the template's.
+            // Explicit display ranges and manually timed overlays keep their saved timing.
+            if (clone.type === 'scroll' && clone.scroll_auto_stop === true
+                && !(Array.isArray(clone.display_ranges) && clone.display_ranges.length)) {
+                clone.end = 9999;
+            }
             
             if (clone.fixed_text) {
                 // 固定文案永远原样保留

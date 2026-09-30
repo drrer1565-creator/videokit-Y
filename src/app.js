@@ -28709,7 +28709,7 @@ async function loadHistoryVersions() {
     if (!container || !listEl) return;
 
     try {
-        const response = await fetch('https://api.github.com/repos/secure-artifacts/VideoKit/releases');
+        const response = await fetch('https://api.github.com/repos/golsaysea/videokit-Y/releases');
         if (!response.ok) throw new Error('API 请求失败');
         const releases = await response.json();
         

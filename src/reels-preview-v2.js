@@ -1548,6 +1548,27 @@
         const drawable = !phase.inCover && !phase.inHook && typeof window.ReelsRenderPlan?.getCompositedOverlays === 'function'
             ? window.ReelsRenderPlan.getCompositedOverlays(task, { width: w, height: h }).filter(ov => ov._insertClip || show)
             : [...inserts, ...visibleOverlays];
+        // Compute scroll anchors before compositing, without changing layer order.
+        // Rendering a preview copy must publish its anchor to the bound media.
+        if (drawable.some(ov => ov?.bind_scroll_overlay_id)) {
+            const measure = state.scrollMeasureCanvas || (state.scrollMeasureCanvas = document.createElement('canvas'));
+            if (measure.width !== w) measure.width = w;
+            if (measure.height !== h) measure.height = h;
+            const measureCtx = measure.getContext('2d');
+            measureCtx.clearRect(0, 0, w, h);
+            for (const ov of drawable) {
+                if (!ov || ov.type !== 'scroll') continue;
+                delete ov._scrollBodyFirstLineY;
+                delete ov._scrollBodyCurX;
+                if (ov.disabled || time < numberOr(ov.start, 0)) continue;
+                const measured = { ...ov, _exporting: false };
+                try {
+                    window.ReelsOverlay.drawOverlay(measureCtx, measured, time, w, h);
+                    ov._scrollBodyFirstLineY = measured._scrollBodyFirstLineY;
+                    ov._scrollBodyCurX = measured._scrollBodyCurX;
+                } catch (err) { console.warn('[PreviewV2] scroll anchor failed', err); }
+            }
+        }
         for (const ov of drawable) {
             if (!ov || ov.disabled) continue;
             const start = numberOr(ov.start, 0);
@@ -1561,7 +1582,7 @@
                 const previewOv = { ...ov, _allOverlays: drawable, _exporting: false };
                 window.ReelsOverlay.drawOverlay(ctx, previewOv, time, w, h);
                 // Keep computed bounds available to hit-testing/property UI.
-                for (const key of ['_renderedX', '_renderedY', '_renderedW', '_renderedH']) {
+                for (const key of ['_renderedX', '_renderedY', '_renderedW', '_renderedH', '_scrollBodyFirstLineY', '_scrollBodyCurX']) {
                     if (previewOv[key] != null) ov[key] = previewOv[key];
                 }
             } catch (err) {
@@ -2880,6 +2901,10 @@
         resetForTaskSwitch: () => {
             if (!state.isOpen) return;
             const wasPlaying = state.isPlaying;
+            if (state.recoveryTimer) clearTimeout(state.recoveryTimer);
+            state.recoveryTimer = null;
+            state.recoveryAttempts = 0;
+            state.recoveryInProgress = false;
             pauseMedia();
             state.isPlaying = false;
             state.pausedAt = 0;

@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { fileURLToPath, pathToFileURL } = require('url');
 const archiver = require('archiver');
-const extract = require('extract-zip');
+const extract = require('./safeExtract');
 
 function sourcePath(value) {
     if (typeof value !== 'string' || value.startsWith('data:')) return '';

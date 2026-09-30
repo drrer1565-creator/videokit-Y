@@ -16,3 +16,13 @@
 LGPL 依赖可与父项目的 GPL-3.0-only 使用方式兼容。VideoKit 自身原快照未提供项目级 LICENSE，本说明不为其新增授权。若将 Python 运行环境另行打包发布，需要同时保留依赖许可、版权、对应源代码获取方式及用户替换库的能力；本次仅验证本地源码启动版。
 
 新增直接依赖数：1。aiohttp、certifi、tabulate、typing-extensions 等为传递依赖，未计入直接依赖数量。环境安装保留各包自带 dist-info 许可文件。
+
+## 4.4.40 Windows release
+
+Edge TTS 7.2.8 LGPL-3.0 source: https://pypi.org/project/edge-tts/7.2.8/ . Included as replaceable external Python files with dist-info licenses; bridge is outside app.asar. VIDEOKIT_EDGE_PYTHON can select a replacement interpreter.
+
+Compatible npm security patches retain upstream licenses (Axios and electron-builder/electron-updater: MIT, https://github.com/axios/axios/blob/v1.x/package.json and https://github.com/electron-userland/electron-builder/blob/master/LICENSE). No project-wide relicensing is asserted.
+
+Bundled font license presence checked, including restored Noto Serif italic OFL notice. Personal fonts excluded. Python retains LICENSE.txt and installed package dist-info. FFmpeg is an external GPL build from https://github.com/BtbN/FFmpeg-Builds with original LICENSE.txt; build scripts/source acquisition instructions: https://github.com/BtbN/FFmpeg-Builds .
+
+The original VideoKit snapshot has no top-level LICENSE; this audit records dependency notices only and does not grant additional rights to upstream source.

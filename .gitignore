@@ -115,6 +115,5 @@ fonts-local/
 
 .venv-edge/
 
-# Local validation outputs
 diagnostics/
 queue-library-preview.png

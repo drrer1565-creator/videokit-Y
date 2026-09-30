@@ -1134,34 +1134,6 @@ function drawOverlay(ctx, origOv, currentTime = 0, canvasW = 1920, canvasH = 108
     const w = parseFloat(ov.w || 100);
     const h = parseFloat(ov.h || 100);
 
-    // ── 跟随滚动字幕正文绑定 ──
-    if (ov.bind_scroll_overlay_id && (ov.type === 'image' || ov.type === 'video')) {
-        const allOvs = ov._allOverlays || [];
-        const scrollOv = allOvs.find(o => o.id === ov.bind_scroll_overlay_id && o.type === 'scroll');
-        if (scrollOv && scrollOv._scrollBodyFirstLineY != null) {
-            const bindOffsetX = parseFloat(ov.bind_scroll_offset_x || 0);
-            const bindOffsetY = parseFloat(ov.bind_scroll_offset_y || 0);
-            const bindMinY = ov.bind_scroll_clamp_min_y;
-            const bindMaxY = ov.bind_scroll_clamp_max_y;
-
-            // Y 跟随正文第一行
-            let targetY = scrollOv._scrollBodyFirstLineY + bindOffsetY;
-            // 应用边界钳制
-            if (bindMinY != null && !isNaN(parseFloat(bindMinY))) {
-                targetY = Math.max(parseFloat(bindMinY), targetY);
-            }
-            if (bindMaxY != null && !isNaN(parseFloat(bindMaxY))) {
-                targetY = Math.min(parseFloat(bindMaxY), targetY);
-            }
-            y = targetY;
-
-            // X 可选跟随
-            if (ov.bind_scroll_follow_x) {
-                x = scrollOv._scrollBodyCurX + bindOffsetX - w / 2;
-            }
-        }
-    }
-
     if (ov.anim_dest_enabled && end > start) {
         // A→B 面板坐标与普通位置控件保持一致：
         // 媒体/文本/文字卡片使用“相对画布中心的中心点偏移”，scroll 使用左上角。
@@ -1204,6 +1176,35 @@ function drawOverlay(ctx, origOv, currentTime = 0, canvasW = 1920, canvasH = 108
         x = startX + (endX - startX) * easedP;
         y = startY + (endY - startY) * easedP;
         destScaleOffset = startScale + (endScale - startScale) * easedP;
+    }
+
+    // Binding owns position after A→B animation; scale animation remains active.
+    // ── 跟随滚动字幕正文绑定 ──
+    if (ov.bind_scroll_overlay_id && (ov.type === 'image' || ov.type === 'video')) {
+        const allOvs = ov._allOverlays || [];
+        const scrollOv = allOvs.find(o => o.id === ov.bind_scroll_overlay_id && o.type === 'scroll');
+        if (scrollOv && scrollOv._scrollBodyFirstLineY != null) {
+            const bindOffsetX = parseFloat(ov.bind_scroll_offset_x || 0);
+            const bindOffsetY = parseFloat(ov.bind_scroll_offset_y || 0);
+            const bindMinY = ov.bind_scroll_clamp_min_y;
+            const bindMaxY = ov.bind_scroll_clamp_max_y;
+
+            // Y 跟随正文第一行
+            let targetY = scrollOv._scrollBodyFirstLineY + bindOffsetY;
+            // 应用边界钳制
+            if (bindMinY != null && !isNaN(parseFloat(bindMinY))) {
+                targetY = Math.max(parseFloat(bindMinY), targetY);
+            }
+            if (bindMaxY != null && !isNaN(parseFloat(bindMaxY))) {
+                targetY = Math.min(parseFloat(bindMaxY), targetY);
+            }
+            y = targetY;
+
+            // X 可选跟随
+            if (ov.bind_scroll_follow_x) {
+                x = scrollOv._scrollBodyCurX + bindOffsetX - w / 2;
+            }
+        }
     }
 
     const rotation = parseFloat(ov.rotation || 0);

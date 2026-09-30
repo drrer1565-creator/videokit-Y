@@ -2435,7 +2435,7 @@ async function routeAPI(endpoint, data, progressSender = null, sender = null) {
             if (!zipPath || !fs.existsSync(zipPath)) throw new Error('无效的归档文件');
             
             const extractDir = settingsService.getSecureTmpDir(`import_${Date.now()}`);
-            const extract = require('extract-zip');
+            const extract = require('./services/safeExtract');
             await extract(zipPath, { dir: extractDir });
 
             const jsonPath = path.join(extractDir, 'template.json');

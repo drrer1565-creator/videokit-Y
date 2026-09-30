@@ -635,6 +635,7 @@ function reelsToggleBatchTable(options = {}) {
         _batchTableState.openedGroupedProjection = wasGroupedProjection ? {
             tasks: _cloneBatchTasks(window._reelsState.tasks || []),
             appliedTabIds: [...(_batchTableState.appliedTabIds || [])],
+            knownTabIds: _batchTableState.tabs.map(tab => tab.id),
             selectedIdx: window._reelsState.selectedIdx,
         } : null;
         // DEBUG
@@ -659,7 +660,11 @@ function reelsToggleBatchTable(options = {}) {
             // 从“外部按组视图”进入表格时，只暂时载入当前标签编辑；
             // 关闭后重新投影全部原分组，不能退化为当前标签的平铺任务。
             if (_batchTableState.openedGroupedProjection) {
-                _restoreGroupedProjectionFromTabs(_batchTableState.openedGroupedProjection.appliedTabIds);
+                const opened = _batchTableState.openedGroupedProjection;
+                const addedIds = _batchTableState.tabs.filter(tab => !(opened.knownTabIds || opened.appliedTabIds).includes(tab.id)).map(tab => tab.id);
+                _restoreGroupedProjectionFromTabs([...opened.appliedTabIds, ...addedIds]);
+            } else if (_batchTableState.tabs.length > 1) {
+                _restoreGroupedProjectionFromTabs(_batchTableState.tabs.map(tab => tab.id));
             }
             _batchTableState.openSnapshotTasks = _batchTasksSnapshot(window._reelsState?.tasks || []);
             console.log('[BatchTable.toggle] 关闭表格，已保存 changes');
@@ -691,6 +696,12 @@ function reelsToggleBatchTable(options = {}) {
         }
         _batchTableState.openedGroupedProjection = null;
         _batchTableState.container.style.display = 'none';
+        if (typeof _renderTaskList === 'function') _renderTaskList();
+        requestAnimationFrame(() => {
+            if (!_batchTableState.visible && window.ReelsPreviewV2?.isOpen()) {
+                window.ReelsPreviewV2.recover('batch-table-applied');
+            }
+        });
     }
 }
 

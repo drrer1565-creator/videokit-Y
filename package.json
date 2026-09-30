@@ -1,6 +1,6 @@
 {
   "name": "videokit",
-  "version": "4.4.39",
+  "version": "4.4.40",
   "description": "视频工具包-批量：音频生成-reels视频制作-多媒体转换",
   "author": {
     "name": "TimCode",
@@ -50,8 +50,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "secure-artifacts",
-        "repo": "VideoKit"
+        "owner": "golsaysea",
+        "repo": "videokit-Y"
       }
     ],
     "directories": {
@@ -138,24 +138,8 @@
           "from": "vendor/windows/python",
           "to": "vendor/python",
           "filter": [
-            "*.exe",
-            "*.dll",
-            "*.pyd",
-            "*.zip",
-            "*.pth",
-            "LICENSE.txt",
-            "python.cat",
-            "Lib/site-packages/yt_dlp/**/*",
-            "Lib/site-packages/yt_dlp*/**/*",
-            "Lib/site-packages/certifi/**/*",
-            "Lib/site-packages/urllib3/**/*",
-            "Lib/site-packages/requests/**/*",
-            "Lib/site-packages/charset_normalizer/**/*",
-            "Lib/site-packages/idna/**/*",
-            "Lib/site-packages/brotli*/**/*",
-            "Lib/site-packages/websockets/**/*",
-            "Lib/site-packages/mutagen/**/*",
-            "Lib/site-packages/pycryptodomex/**/*",
+            "**/*",
+            "!get-pip.py",
             "!**/__pycache__/**",
             "!**/test/**",
             "!**/tests/**"
@@ -194,6 +178,23 @@
           ]
         }
       ]
-    }
+    },
+    "extraResources": [
+      {
+        "from": "third-party",
+        "to": "third-party",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "docs/DEPENDENCY_LICENSE_AUDIT.md",
+        "to": "DEPENDENCY_LICENSE_AUDIT.md"
+      },
+      {
+        "from": "electron/services/edge_tts_bridge.py",
+        "to": "edge-tts/edge_tts_bridge.py"
+      }
+    ]
   }
 }

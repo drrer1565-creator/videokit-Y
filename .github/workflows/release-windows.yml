@@ -1,0 +1,167 @@
+name: Release Windows
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHON_EMBED_VERSION: '3.11.9'
+jobs:
+  build-windows:
+    name: 🪟 Windows (x64)
+    runs-on: windows-latest
+    
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 📦 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: 🐍 下载 Python Embedded
+        shell: pwsh
+        run: |
+          $pythonUrl = "https://www.python.org/ftp/python/${{ env.PYTHON_EMBED_VERSION }}/python-${{ env.PYTHON_EMBED_VERSION }}-embed-amd64.zip"
+          $pythonZip = "python-embed.zip"
+          
+          Write-Host "📥 下载 Python Embedded from $pythonUrl"
+          Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonZip
+          
+          # 创建目录并解压
+          New-Item -ItemType Directory -Force -Path "vendor/windows/python"
+          Expand-Archive -Path $pythonZip -DestinationPath "vendor/windows/python" -Force
+          Remove-Item $pythonZip
+          
+          # 修改 python311._pth 启用 site-packages
+          $pthFile = "vendor/windows/python/python311._pth"
+          @"
+          python311.zip
+          .
+          Lib/site-packages
+          import site
+          "@ | Set-Content $pthFile -Encoding UTF8
+          
+          Write-Host "📄 python311._pth 内容:"
+          Get-Content $pthFile
+          
+          # 下载 get-pip.py
+          Write-Host "📥 下载 get-pip.py"
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "vendor/windows/python/get-pip.py"
+          
+          # 创建 site-packages 目录
+          New-Item -ItemType Directory -Force -Path "vendor/windows/python/Lib/site-packages"
+          
+          # 安装 pip
+          Write-Host "🔧 安装 pip"
+          & "vendor/windows/python/python.exe" "vendor/windows/python/get-pip.py" --no-warn-script-location
+          
+          # 安装依赖到 site-packages
+          Write-Host "🔧 安装 Python 依赖"
+          & "vendor/windows/python/python.exe" -m pip install -r requirements-edge.txt yt-dlp requests --target "vendor/windows/python/Lib/site-packages" --no-warn-script-location
+          
+          # 验证依赖安装
+          Write-Host "🔍 验证 Flask 和 flask-cors 安装:"
+          & "vendor/windows/python/python.exe" -c "import edge_tts, yt_dlp; print('Edge TTS runtime OK')"
+          
+          Write-Host "✅ Python Embedded 安装完成"
+          dir "vendor/windows/python"
+          dir "vendor/windows/python/Lib/site-packages"
+      
+      - name: 📥 下载 FFmpeg (Windows)
+        shell: pwsh
+        run: |
+          $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          $ffmpegZip = "ffmpeg.zip"
+          
+          Write-Host "📥 下载 FFmpeg from $ffmpegUrl"
+          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip
+          
+          # 解压到临时目录
+          Expand-Archive -Path $ffmpegZip -DestinationPath "ffmpeg-temp" -Force
+          
+          # 创建目标目录并移动文件
+          New-Item -ItemType Directory -Force -Path "vendor/windows/ffmpeg/bin"
+          
+          # 找到解压后的目录（名称可能包含版本号）
+          $extractedDir = Get-ChildItem -Path "ffmpeg-temp" -Directory | Select-Object -First 1
+          Copy-Item "$($extractedDir.FullName)/bin/ffmpeg.exe" "vendor/windows/ffmpeg/bin/"
+          Copy-Item "$($extractedDir.FullName)/bin/ffprobe.exe" "vendor/windows/ffmpeg/bin/"
+          Copy-Item "$($extractedDir.FullName)/LICENSE.txt" "vendor/windows/ffmpeg/" -ErrorAction Stop
+          
+          # 清理
+          Remove-Item $ffmpegZip
+          Remove-Item -Recurse -Force "ffmpeg-temp"
+          
+          Write-Host "✅ FFmpeg 安装完成"
+          dir "vendor/windows/ffmpeg/bin"
+      
+      - name: 🔧 安装 Node 依赖
+        run: npm ci
+      
+      - name: 🏗️ 构建前端
+        run: npm run build
+      
+      - name: 📦 打包 Windows x64
+        run: npx electron-builder --win --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 📤 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            dist-electron/*.zip
+            dist-electron/*.exe
+            dist-electron/latest.yml
+            dist-electron/*.blockmap
+          retention-days: 30
+
+  create-release:
+    name: 📢 创建 GitHub Release
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+    
+    steps:
+      - name: 📥 下载所有产物
+        uses: actions/download-artifact@v4
+        with:
+          path: all-builds
+          merge-multiple: true
+      
+      - name: 📋 列出文件
+        run: ls -la all-builds/
+
+      - name: 🧹 清理多余文件
+        run: |
+          rm -f all-builds/builder-debug.yml
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd all-builds
+          sha256sum * > ../checksums.sha256
+          mv ../checksums.sha256 .
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'all-builds/*'
+      
+      - name: 🎉 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: all-builds/*
+          draft: false
+          generate_release_notes: true

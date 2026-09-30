@@ -126,8 +126,8 @@ function isBetaVersion(version) {
 async function fetchLatestZipUrl(allowPrerelease) {
     // 从 app-update.yml 读取 owner/repo 信息
     const appUpdateYml = path.join(process.resourcesPath || '', 'app-update.yml');
-    let owner = 'secure-artifacts';
-    let repo = 'VideoKit';
+    let owner = 'golsaysea';
+    let repo = 'videokit-Y';
 
     try {
         const yml = fs.readFileSync(appUpdateYml, 'utf-8');
@@ -303,7 +303,7 @@ async function portableUpdate(info) {
         sendToRenderer('update-status', { status: 'downloading', message: '解压更新文件中...', percent: 100 });
 
         // 解压覆盖当前目录
-        const extract = require('extract-zip');
+        const extract = require('./services/safeExtract');
         await extract(zipPath, { dir: _portableDir });
 
         log(`[Updater-Portable] 解压完成 v${version}`);

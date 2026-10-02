@@ -8924,7 +8924,36 @@ function _renderTaskList() {
 
     // Auto-scroll selected task into view
     const selectedEl = container.querySelector('.reels-task-selected');
-    if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+}
+
+// 仅切换任务时，列表结构和分组统计都没有变化；避免为一次选择把整个任务列表
+// innerHTML 重建。任务新增/删除/分组变化仍走 _renderTaskList() 完整渲染。
+function _updateTaskListSelectionOnly(prevIdx, nextIdx) {
+    const container = document.getElementById('reels-task-list');
+    if (!container) return false;
+    const nextEl = container.querySelector(`.reels-task-item[data-task-idx="${nextIdx}"]`);
+    if (!nextEl) return false;
+
+    const apply = (el, selected) => {
+        if (!el) return;
+        el.classList.toggle('reels-task-selected', selected);
+        el.style.background = selected ? 'rgba(0,212,255,0.15)' : 'transparent';
+        el.style.borderLeft = selected ? '3px solid #4c9eff' : '3px solid transparent';
+        el.style.boxShadow = selected ? 'inset 0 0 0 1px rgba(0,212,255,0.3)' : '';
+        const name = el.querySelector('.reels-task-name');
+        if (name) {
+            name.style.fontWeight = selected ? '600' : '400';
+            name.style.color = selected ? '#fff' : 'var(--text-primary)';
+        }
+    };
+
+    if (Number.isInteger(prevIdx) && prevIdx >= 0 && prevIdx !== nextIdx) {
+        apply(container.querySelector(`.reels-task-item[data-task-idx="${prevIdx}"]`), false);
+    }
+    apply(nextEl, true);
+    nextEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    return true;
 }
 
 function reelsToggleBatchGroup(groupId) {
@@ -9010,7 +9039,8 @@ async function _preFetchTaskMediaDurations(task) {
 
 function reelsSelectTask(idx) {
     // ── 保存当前任务的覆层 ──
-    const prevTask = _reelsState.tasks[_reelsState.selectedIdx];
+    const prevIdx = _reelsState.selectedIdx;
+    const prevTask = _reelsState.tasks[prevIdx];
     if (prevTask && _reelsState.overlayProxy && _reelsState.overlayProxy.overlayMgr) {
         if (_reelsState._coverEditMode && prevTask.cover) {
             prevTask.cover.overlays = [...(_reelsState.overlayProxy.overlayMgr.overlays || [])];
@@ -9020,7 +9050,7 @@ function reelsSelectTask(idx) {
     }
 
     _reelsState.selectedIdx = idx;
-    _renderTaskList();
+    if (!_updateTaskListSelectionOnly(prevIdx, idx)) _renderTaskList();
     const task = _reelsState.tasks[idx];
     if (!task) return;
     if (typeof window.reelsRefreshCvPosControl === 'function') window.reelsRefreshCvPosControl();

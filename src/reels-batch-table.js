@@ -16780,8 +16780,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     _initBatchTable();
 
-    // 每30秒自动保存一次（安全网）
+    // 每30秒自动保存一次（安全网）。后台窗口跳过全量 tabs/tasks 序列化，
+    // 用户操作触发的即时保存与 beforeunload 保存保持不变。
     setInterval(() => {
+        if (document.hidden) return;
         if (window._reelsState && (window._reelsState.tasks || []).length > 0) {
             _batchAutoSave();
         }

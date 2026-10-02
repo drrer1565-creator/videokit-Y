@@ -1,6 +1,7 @@
 const { app, dialog, shell, clipboard, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
@@ -43,10 +44,13 @@ function getFfmpegCommand() {
 
 function runExecFile(command, args) {
     return new Promise((resolve, reject) => {
-        execFile(command, args, { windowsHide: true }, (error) => {
+        const child = execFile(command, args, { windowsHide: true }, (error) => {
             if (error) reject(error);
             else resolve();
         });
+        if (process.platform === 'win32' && /ffmpeg(?:\.exe)?$/i.test(path.basename(String(command || '')))) {
+            try { os.setPriority(child.pid, os.constants?.priority?.PRIORITY_BELOW_NORMAL ?? 10); } catch (_) { }
+        }
     });
 }
 
@@ -280,6 +284,23 @@ function insertPrefixBeforeCounter(name, prefix) {
 }
 
 const localVideoThumbnailInflight = new Map();
+const LOCAL_THUMBNAIL_CONCURRENCY = 2;
+let localThumbnailActive = 0;
+const localThumbnailWaiters = [];
+
+async function withLocalThumbnailSlot(fn) {
+    if (localThumbnailActive >= LOCAL_THUMBNAIL_CONCURRENCY) {
+        await new Promise(resolve => localThumbnailWaiters.push(resolve));
+    }
+    localThumbnailActive += 1;
+    try {
+        return await fn();
+    } finally {
+        localThumbnailActive = Math.max(0, localThumbnailActive - 1);
+        const next = localThumbnailWaiters.shift();
+        if (next) next();
+    }
+}
 
 function getSafeWindow(getMainWindow) {
     try {
@@ -550,7 +571,7 @@ function registerLocalOrganizer(ipcMain, getMainWindow) {
                 return await localVideoThumbnailInflight.get(cacheKey);
             }
 
-            const job = (async () => {
+            const job = withLocalThumbnailSlot(async () => {
                 await fs.promises.mkdir(cacheDir, { recursive: true });
                 const temporaryPath = path.join(cacheDir, `${cacheKey}.${process.pid}.tmp.jpg`);
                 try {
@@ -574,7 +595,7 @@ function registerLocalOrganizer(ipcMain, getMainWindow) {
                     } catch (_) {}
                     return null;
                 }
-            })();
+            });
 
             localVideoThumbnailInflight.set(cacheKey, job);
             try {

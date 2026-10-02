@@ -819,12 +819,7 @@ async function routeAPI(endpoint, data, progressSender = null, sender = null) {
         // ==================== 媒体操作 ====================
         case 'media/info': {
             if (!data.file_path) throw new Error('缺少文件路径');
-            const [duration, frameRate, resolution] = await Promise.all([
-                ffmpegService.getDuration(data.file_path),
-                ffmpegService.getFrameRate(data.file_path),
-                ffmpegService.getResolution(data.file_path)
-            ]);
-            return { duration, frame_rate: frameRate, resolution };
+            return await ffmpegService.getMediaInfo(data.file_path);
         }
 
         case 'media/concat-clips': {

@@ -53,6 +53,18 @@ function appendProcessLog(previous, chunk) {
         : next;
 }
 
+function _deprioritizeMediaProcess(proc, label = 'ffmpeg') {
+    if (!proc || !proc.pid) return;
+    // Windows 上 FFmpeg 很容易吃满所有核心，把 Electron renderer 的输入/绘制挤掉。
+    // Below Normal 只影响调度优先级，不限制线程数、不改变编码参数或输出结果。
+    if (process.platform !== 'win32') return;
+    try {
+        os.setPriority(proc.pid, os.constants?.priority?.PRIORITY_BELOW_NORMAL ?? 10);
+    } catch (error) {
+        console.warn(`[${label}] 无法调整进程优先级: ${error.message}`);
+    }
+}
+
 function expandHomePath(p) {
     if (!p || typeof p !== 'string') return p;
     if (p === '~') return os.homedir();
@@ -110,6 +122,7 @@ function runCommand(cmd, args, options = {}) {
             env: { ...process.env, ...options.env },
             cwd: options.cwd,
         });
+        if (cmd === 'ffmpeg') _deprioritizeMediaProcess(proc, 'FFmpeg');
         let cancelled = false;
         const abort = () => {
             cancelled = true;
@@ -2618,6 +2631,7 @@ async function concatVideo(opts) {
 module.exports = {
     resolveCommand,
     runCommand,
+    deprioritizeMediaProcess: _deprioritizeMediaProcess,
     getDuration,
     getDurationDetailed,
     getMediaInfo,

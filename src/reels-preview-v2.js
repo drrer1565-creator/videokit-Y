@@ -459,6 +459,7 @@
         setLegacyVisible(true);
         pauseMedia();
         disconnectAudioGraph();
+        if (state.audioCtx?.state === 'running') state.audioCtx.suspend().catch(() => {});
         state.isPlaying = false;
         if (state.raf) cancelAnimationFrame(state.raf);
         state.raf = null;
@@ -890,6 +891,7 @@
             state.pausedAt = getCurrentTime();
             pauseMedia();
             state.isPlaying = false;
+            if (state.audioCtx?.state === 'running') state.audioCtx.suspend().catch(() => {});
             updatePlayButton();
             render();
             if (state.raf) cancelAnimationFrame(state.raf);

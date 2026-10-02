@@ -85,3 +85,11 @@ test('preview WebAudio contexts suspend while idle', () => {
     assert.match(v2, /state\.audioCtx\?\.state === 'running'/);
     assert.match(v2, /state\.audioCtx\.suspend\(\)/);
 });
+
+
+test('editor windows throttle in background while export renderer stays unthrottled', () => {
+    const main = read('electron/main.js');
+    assert.match(main, /backgroundThrottling: true/);
+    assert.match(main, /isolatedReelsRenderers/);
+    assert.match(main, /backgroundThrottling: false/);
+});

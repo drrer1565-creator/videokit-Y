@@ -1422,21 +1422,24 @@ function _initCvPosControl() {
     });
     panel.tabIndex = 0; // 使其可聚焦以接收键盘事件
 
-    // 控制器显示/隐藏: 按钮仅在有内容视频时显示，面板由用户手动开关
+    // 控制器显示/隐藏改为事件驱动。旧实现每 500ms 无条件检查一次，
+    // 多窗口时会形成永久轮询；任务切换/内容视频变化时主动刷新即可。
     const toggleBtn = document.getElementById('reels-cv-pos-toggle');
-    setInterval(() => {
+    const refreshCvPosControl = () => {
         const task = _getTask();
-        const hasCV = task && task.contentVideoPath;
-        // 仅控制 toggle 按钮的可见性
+        const hasCV = !!(task && task.contentVideoPath);
         if (toggleBtn) toggleBtn.style.display = hasCV ? '' : 'none';
-        // 没有内容视频时自动隐藏面板
         if (!hasCV && panel.style.display !== 'none') {
             panel.style.display = 'none';
-            if (toggleBtn) { toggleBtn.style.background = 'rgba(100,160,255,0.1)'; toggleBtn.style.color = '#8af'; }
+            if (toggleBtn) {
+                toggleBtn.style.background = 'rgba(100,160,255,0.1)';
+                toggleBtn.style.color = '#8af';
+            }
         }
-        // 面板打开时更新值
         if (hasCV && panel.style.display !== 'none') _updateDisplay();
-    }, 500);
+    };
+    window.reelsRefreshCvPosControl = refreshCvPosControl;
+    refreshCvPosControl();
 }
 
 function _initReelsColumnResize() {
@@ -9020,6 +9023,7 @@ function reelsSelectTask(idx) {
     _renderTaskList();
     const task = _reelsState.tasks[idx];
     if (!task) return;
+    if (typeof window.reelsRefreshCvPosControl === 'function') window.reelsRefreshCvPosControl();
     _preFetchMultiBgDurations(task);
     _preFetchTaskMediaDurations(task);
     const taskStyle = _resolveSubtitleStyleForTask(task);

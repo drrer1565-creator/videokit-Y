@@ -34,3 +34,19 @@ test('task list group statistics are precomputed instead of filtered per row', (
     assert.doesNotMatch(src, /const groupTasks = tasks\.filter/);
     assert.doesNotMatch(src, /const queueTasks = tasks\.filter/);
 });
+
+
+test('task selection updates only affected rows', () => {
+    const src = read('src/batch-reels.js');
+    assert.match(src, /function _updateTaskListSelectionOnly\(prevIdx, nextIdx\)/);
+    assert.match(src, /if \(!_updateTaskListSelectionOnly\(prevIdx, idx\)\) _renderTaskList\(\)/);
+});
+
+test('periodic autosaves skip hidden windows', () => {
+    const reels = read('src/batch-reels.js');
+    const table = read('src/reels-batch-table.js');
+    const preload = read('electron/preload.js');
+    assert.match(reels, /setInterval\(\(\) => \{\s*if \(document\.hidden\) return;/);
+    assert.match(table, /setInterval\(\(\) => \{\s*if \(document\.hidden\) return;/);
+    assert.match(preload, /requestIdleCallback/);
+});

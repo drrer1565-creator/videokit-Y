@@ -50,3 +50,28 @@ test('periodic autosaves skip hidden windows', () => {
     assert.match(table, /setInterval\(\(\) => \{\s*if \(document\.hidden\) return;/);
     assert.match(preload, /requestIdleCallback/);
 });
+
+
+test('ffprobe duration requests are cached and coalesced', () => {
+    const src = read('electron/services/ffmpeg.js');
+    assert.match(src, /const _durationCache = new Map\(\)/);
+    assert.match(src, /const _durationInflight = new Map\(\)/);
+    assert.match(src, /_mediaProbeSignature/);
+    assert.match(src, /if \(signature && _durationInflight\.has\(signature\)\)/);
+});
+
+test('media info uses one combined ffprobe path', () => {
+    const ffmpeg = read('electron/services/ffmpeg.js');
+    const router = read('electron/apiRouter.js');
+    assert.match(ffmpeg, /async function getMediaInfo\(filePath\)/);
+    assert.match(ffmpeg, /format=duration:stream=width,height,r_frame_rate/);
+    assert.match(router, /return await ffmpegService\.getMediaInfo\(data\.file_path\)/);
+});
+
+test('Windows FFmpeg child processes yield priority to the UI', () => {
+    const ffmpeg = read('electron/services/ffmpeg.js');
+    const raw = read('electron/services/ffmpeg-rawvideo.js');
+    assert.match(ffmpeg, /PRIORITY_BELOW_NORMAL/);
+    assert.match(ffmpeg, /if \(cmd === 'ffmpeg'\) _deprioritizeMediaProcess/);
+    assert.match(raw, /function deprioritize\(proc\)/);
+});

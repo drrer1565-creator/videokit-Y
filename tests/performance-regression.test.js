@@ -101,3 +101,11 @@ test('local video thumbnails are concurrency-limited', () => {
     assert.match(src, /withLocalThumbnailSlot/);
     assert.match(src, /PRIORITY_BELOW_NORMAL/);
 });
+
+
+test('batch export media probing has bounded concurrency', () => {
+    const src = read('src/batch-reels.js');
+    assert.match(src, /async function _prefetchTaskMediaDurationsBounded\(tasks, concurrency = 4\)/);
+    assert.match(src, /await _prefetchTaskMediaDurationsBounded\(tasks, 4\)/);
+    assert.doesNotMatch(src, /Promise\.all\(tasks\.map\(t => _preFetchTaskMediaDurations\(t\)\)\)/);
+});

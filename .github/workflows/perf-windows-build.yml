@@ -72,17 +72,14 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Package Windows performance build
+      - name: Package Windows portable performance build
         shell: pwsh
         run: |
-          npx electron-builder --win --x64 --publish never '-c.win.artifactName=VideoKit-Performance-Test-${version}.${ext}'
+          npx electron-builder --win portable --x64 --publish never '-c.win.artifactName=VideoKit-Performance-Portable-${version}.${ext}'
 
-      - name: Upload Windows EXE
+      - name: Upload Windows portable EXE
         uses: actions/upload-artifact@v4
         with:
-          name: VideoKit-Performance-Windows
-          path: |
-            dist-electron/*.exe
-            dist-electron/*.blockmap
-            dist-electron/latest.yml
+          name: VideoKit-Performance-Portable-Windows
+          path: dist-electron/VideoKit-Performance-Portable-*.exe
           retention-days: 14

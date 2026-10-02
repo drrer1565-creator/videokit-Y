@@ -9603,6 +9603,7 @@ function reelsTogglePlay() {
         _reelsState.mockPausedTime = savedTime;
         if (hookVideo) hookVideo.pause();
         if (bgmAudio) bgmAudio.pause();
+        if (_reelsState._audioCtx?.state === 'running') _reelsState._audioCtx.suspend().catch(() => {});
         if (btn) btn.textContent = '▶️';
         // 刷新一次最终暂停帧，同时让预览循环在本帧后停止。
         reelsUpdatePreview();
@@ -14057,6 +14058,9 @@ if (typeof MutationObserver !== 'undefined') {
             if (_reelsState.previewRAF) {
                 cancelAnimationFrame(_reelsState.previewRAF);
                 _reelsState.previewRAF = null;
+            }
+            if (_reelsState._audioCtx?.state === 'running') {
+                _reelsState._audioCtx.suspend().catch(() => {});
             }
         }
     });

@@ -13996,8 +13996,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 自动保存 (每 60 秒)
+    // 自动保存 (每 60 秒)。后台窗口没有用户编辑，跳过这一轮大型工程序列化；
+    // 切回前台后继续，关闭/刷新前仍由既有保存路径兜底。
     setInterval(() => {
+        if (document.hidden) return;
         if (_reelsState.tasks.length > 0 && window.ReelsProject) {
             const style = _readStyleFromUI();
             _persistSubtitleStyleByScope(style);

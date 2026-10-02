@@ -109,3 +109,11 @@ test('batch export media probing has bounded concurrency', () => {
     assert.match(src, /await _prefetchTaskMediaDurationsBounded\(tasks, 4\)/);
     assert.doesNotMatch(src, /Promise\.all\(tasks\.map\(t => _preFetchTaskMediaDurations\(t\)\)\)/);
 });
+
+
+test('missing media duration repair avoids synchronous recursive disk scans', () => {
+    const src = read('electron/services/ffmpeg.js');
+    assert.match(src, /async function _findFileRecursiveAsync/);
+    assert.match(src, /async function _repairMissingMediaPathAsync/);
+    assert.match(src, /await _repairMissingMediaPathAsync\(filePath\)/);
+});

@@ -393,12 +393,17 @@
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 state.wasDocumentHidden = true;
+                if (state.raf) cancelAnimationFrame(state.raf);
+                state.raf = null;
                 return;
             }
             if (state.wasDocumentHidden) {
                 state.wasDocumentHidden = false;
                 scheduleMediaRecovery('window-visible', true, 120);
             }
+            // 恢复前台后只在播放时重启连续渲染；暂停态只补画一次。
+            if (state.isPlaying) startLoop();
+            else render();
         });
         window.addEventListener('focus', () => {
             if (!document.hidden) scheduleMediaRecovery('window-focus', false, 120);
@@ -454,6 +459,7 @@
         setLegacyVisible(true);
         pauseMedia();
         disconnectAudioGraph();
+        if (state.audioCtx?.state === 'running') state.audioCtx.suspend().catch(() => {});
         state.isPlaying = false;
         if (state.raf) cancelAnimationFrame(state.raf);
         state.raf = null;
@@ -510,11 +516,19 @@
     function startLoop() {
         if (!state.isOpen) return;
         if (state.raf) cancelAnimationFrame(state.raf);
+        state.raf = null;
+
         const tick = () => {
-            if (!state.isOpen) return;
+            state.raf = null;
+            if (!state.isOpen || document.hidden) return;
             loadCurrentTask(false);
             render();
-            state.raf = requestAnimationFrame(tick);
+
+            // 暂停时不维持常驻 60fps RAF。seek、样式修改、媒体加载等路径都会
+            // 主动 render()；只有实际播放时才需要连续帧循环。
+            if (state.isPlaying) {
+                state.raf = requestAnimationFrame(tick);
+            }
         };
         state.raf = requestAnimationFrame(tick);
     }
@@ -877,8 +891,11 @@
             state.pausedAt = getCurrentTime();
             pauseMedia();
             state.isPlaying = false;
+            if (state.audioCtx?.state === 'running') state.audioCtx.suspend().catch(() => {});
             updatePlayButton();
             render();
+            if (state.raf) cancelAnimationFrame(state.raf);
+            state.raf = null;
             return;
         }
 
@@ -889,6 +906,7 @@
         playMedia();
         state.isPlaying = true;
         updatePlayButton();
+        startLoop();
     }
 
     function playMedia() {

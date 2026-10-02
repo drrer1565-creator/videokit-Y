@@ -17,11 +17,52 @@ const PROBE_TIMEOUT = 30000;    // 30 秒
 // 仍足够给 formatMediaError 提取实际失败原因。
 const MAX_PROCESS_LOG_CHARS = 4 * 1024 * 1024;
 
+// ffprobe 在任务切换、预览、导出准备阶段会反复查询同一个媒体。
+// 用 文件路径 + size + mtime 作为签名：文件不变则复用；文件被覆盖后自动失效。
+// 同一个文件的并发请求也合并为一个 ffprobe 进程，避免批量预取瞬间拉起几十个进程。
+const MEDIA_PROBE_CACHE_MAX = 512;
+const _durationCache = new Map();
+const _durationInflight = new Map();
+const _mediaInfoCache = new Map();
+const _mediaInfoInflight = new Map();
+
+function _mediaProbeSignature(filePath) {
+    try {
+        const resolved = path.resolve(filePath);
+        const stat = fs.statSync(resolved);
+        if (!stat.isFile()) return null;
+        return `${resolved}\u0000${stat.size}\u0000${stat.mtimeMs}`;
+    } catch (_) {
+        return null;
+    }
+}
+
+function _cacheSetBounded(cache, key, value) {
+    if (!key) return;
+    if (cache.has(key)) cache.delete(key);
+    cache.set(key, value);
+    while (cache.size > MEDIA_PROBE_CACHE_MAX) {
+        cache.delete(cache.keys().next().value);
+    }
+}
+
 function appendProcessLog(previous, chunk) {
     const next = previous + String(chunk || '');
     return next.length > MAX_PROCESS_LOG_CHARS
         ? next.slice(-MAX_PROCESS_LOG_CHARS)
         : next;
+}
+
+function _deprioritizeMediaProcess(proc, label = 'ffmpeg') {
+    if (!proc || !proc.pid) return;
+    // Windows 上 FFmpeg 很容易吃满所有核心，把 Electron renderer 的输入/绘制挤掉。
+    // Below Normal 只影响调度优先级，不限制线程数、不改变编码参数或输出结果。
+    if (process.platform !== 'win32') return;
+    try {
+        os.setPriority(proc.pid, os.constants?.priority?.PRIORITY_BELOW_NORMAL ?? 10);
+    } catch (error) {
+        console.warn(`[${label}] 无法调整进程优先级: ${error.message}`);
+    }
 }
 
 function expandHomePath(p) {
@@ -81,6 +122,7 @@ function runCommand(cmd, args, options = {}) {
             env: { ...process.env, ...options.env },
             cwd: options.cwd,
         });
+        if (cmd === 'ffmpeg') _deprioritizeMediaProcess(proc, 'FFmpeg');
         let cancelled = false;
         const abort = () => {
             cancelled = true;
@@ -136,6 +178,50 @@ function _findFileRecursive(dir, fileName, maxDepth) {
 }
 
 // 通用媒体路径修复：搜索常见目录
+const _missingPathRepairCache = new Map();
+const MISSING_PATH_REPAIR_TTL_MS = 30 * 1000;
+
+async function _findFileRecursiveAsync(dir, fileName, maxDepth) {
+    if (maxDepth <= 0) return null;
+    let entries;
+    try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch (_) { return null; }
+
+    for (const entry of entries) {
+        if (entry.isFile() && entry.name === fileName) return path.join(dir, entry.name);
+    }
+    for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        const found = await _findFileRecursiveAsync(path.join(dir, entry.name), fileName, maxDepth - 1);
+        if (found) return found;
+    }
+    return null;
+}
+
+async function _repairMissingMediaPathAsync(filePath) {
+    const key = String(filePath || '');
+    const cached = _missingPathRepairCache.get(key);
+    if (cached && (Date.now() - cached.at) < MISSING_PATH_REPAIR_TTL_MS) return cached.value;
+
+    const bareFileName = path.basename(filePath);
+    const searchDirs = [
+        path.join(os.homedir(), 'Downloads'),
+        path.join(os.homedir(), 'Desktop'),
+        path.join(os.homedir(), 'Documents'),
+    ];
+
+    let found = null;
+    for (const searchDir of searchDirs) {
+        if (!fs.existsSync(searchDir)) continue;
+        found = await _findFileRecursiveAsync(searchDir, bareFileName, 4);
+        if (found) break;
+    }
+    _missingPathRepairCache.set(key, { at: Date.now(), value: found });
+    if (_missingPathRepairCache.size > 128) {
+        _missingPathRepairCache.delete(_missingPathRepairCache.keys().next().value);
+    }
+    return found;
+}
+
 function _resolveMediaPath(filePath) {
     const bareFileName = path.basename(filePath);
     const searchDirs = [
@@ -162,86 +248,160 @@ async function getDuration(filePath) {
     if (cleanPath.startsWith('local-media://')) {
         cleanPath = cleanPath.replace(/^local-media:\/\//i, '');
     }
-    // On Windows, if cleanPath starts with "/", e.g. "/C:/Users/...", remove the leading "/"
     if (process.platform === 'win32' && cleanPath.startsWith('/') && cleanPath.includes(':')) {
         cleanPath = cleanPath.substring(1);
     }
     filePath = cleanPath;
 
-    // 路径自动修复：如果不是绝对路径或文件不存在，尝试搜索
+    // 路径自动修复改为异步，避免主进程在大目录中同步递归扫描导致整个 UI 卡死。
+    // 同一个失效路径 30 秒内复用结果（包括“没找到”），避免预览/导出重复扫盘。
     if (filePath && (!path.isAbsolute(filePath) || !fs.existsSync(filePath))) {
-        const bareFileName = path.basename(filePath);
-        const searchDirs = [
-            path.join(os.homedir(), 'Downloads'),
-            path.join(os.homedir(), 'Desktop'),
-            path.join(os.homedir(), 'Documents'),
-        ];
-        for (const searchDir of searchDirs) {
-            if (!fs.existsSync(searchDir)) continue;
-            const found = _findFileRecursive(searchDir, bareFileName, 4);
-            if (found) {
-                console.log(`[getDuration] 自动修复路径: "${filePath}" → "${found}"`);
-                filePath = found;
-                break;
-            }
+        const found = await _repairMissingMediaPathAsync(filePath);
+        if (found) {
+            console.log(`[getDuration] 自动修复路径: "${filePath}" → "${found}"`);
+            filePath = found;
         }
     }
-    // 方法1: 通过 format=duration 获取
-    try {
-        const { stdout, stderr } = await runCommand('ffprobe', [
-            '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            filePath
-        ], { timeout: PROBE_TIMEOUT });
-        const dur = parseFloat(stdout.trim());
-        if (!isNaN(dur) && dur > 0) return dur;
-        console.warn(`[getDuration] format=duration 返回无效值: stdout="${stdout.trim()}", stderr="${(stderr || '').trim()}", file=${filePath}`);
-    } catch (e) {
-        console.warn(`[getDuration] 方法1失败 (format=duration): ${e.message}, file=${filePath}`);
+
+    const signature = _mediaProbeSignature(filePath);
+    if (signature && _durationCache.has(signature)) {
+        return _durationCache.get(signature);
+    }
+    if (signature && _durationInflight.has(signature)) {
+        return _durationInflight.get(signature);
     }
 
-    // 方法2: 通过 stream=duration 获取（某些容器格式 format 级别没有 duration）
-    try {
-        const { stdout, stderr } = await runCommand('ffprobe', [
-            '-v', 'error',
-            '-select_streams', 'v:0',
-            '-show_entries', 'stream=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            filePath
-        ], { timeout: PROBE_TIMEOUT });
-        const dur = parseFloat(stdout.trim());
-        if (!isNaN(dur) && dur > 0) {
-            console.log(`[getDuration] 方法2成功 (stream=duration): ${dur}s, file=${filePath}`);
-            return dur;
+    const probePromise = (async () => {
+        // 方法1: 通过 format=duration 获取
+        try {
+            const { stdout, stderr } = await runCommand('ffprobe', [
+                '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                filePath
+            ], { timeout: PROBE_TIMEOUT });
+            const dur = parseFloat(stdout.trim());
+            if (!isNaN(dur) && dur > 0) return dur;
+            console.warn(`[getDuration] format=duration 返回无效值: stdout="${stdout.trim()}", stderr="${(stderr || '').trim()}", file=${filePath}`);
+        } catch (e) {
+            console.warn(`[getDuration] 方法1失败 (format=duration): ${e.message}, file=${filePath}`);
         }
-    } catch (e) {
-        console.warn(`[getDuration] 方法2失败 (stream=duration): ${e.message}`);
-    }
 
-    // 方法3: 用 ffprobe -count_packets 计算时长（最准确但最慢）
-    try {
-        const { stdout } = await runCommand('ffprobe', [
-            '-v', 'error',
-            '-count_packets',
-            '-show_entries', 'stream=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            filePath
-        ], { timeout: PROBE_TIMEOUT * 2 });
-        // 可能返回多行（多流），取第一个有效值
-        for (const line of stdout.split('\n')) {
-            const dur = parseFloat(line.trim());
+        // 方法2: 某些容器 format 级别没有 duration
+        try {
+            const { stdout, stderr } = await runCommand('ffprobe', [
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                filePath
+            ], { timeout: PROBE_TIMEOUT });
+            const dur = parseFloat(stdout.trim());
             if (!isNaN(dur) && dur > 0) {
-                console.log(`[getDuration] 方法3成功 (count_packets): ${dur}s, file=${filePath}`);
+                console.log(`[getDuration] 方法2成功 (stream=duration): ${dur}s, file=${filePath}`);
                 return dur;
             }
+        } catch (e) {
+            console.warn(`[getDuration] 方法2失败 (stream=duration): ${e.message}`);
         }
-    } catch (e) {
-        console.warn(`[getDuration] 方法3失败 (count_packets): ${e.message}`);
+
+        // 方法3: 最慢兜底
+        try {
+            const { stdout } = await runCommand('ffprobe', [
+                '-v', 'error',
+                '-count_packets',
+                '-show_entries', 'stream=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                filePath
+            ], { timeout: PROBE_TIMEOUT * 2 });
+            for (const line of stdout.split('\n')) {
+                const dur = parseFloat(line.trim());
+                if (!isNaN(dur) && dur > 0) {
+                    console.log(`[getDuration] 方法3成功 (count_packets): ${dur}s, file=${filePath}`);
+                    return dur;
+                }
+            }
+        } catch (e) {
+            console.warn(`[getDuration] 方法3失败 (count_packets): ${e.message}`);
+        }
+
+        console.error(`[getDuration] 所有方法均失败, file=${filePath}`);
+        return null;
+    })();
+
+    if (signature) _durationInflight.set(signature, probePromise);
+    try {
+        const duration = await probePromise;
+        if (signature && Number.isFinite(duration) && duration > 0) {
+            _cacheSetBounded(_durationCache, signature, duration);
+        }
+        return duration;
+    } finally {
+        if (signature) _durationInflight.delete(signature);
+    }
+}
+
+async function getMediaInfo(filePath) {
+    if (!filePath || typeof filePath !== 'string') {
+        return { duration: null, frame_rate: 30, resolution: '' };
     }
 
-    console.error(`[getDuration] 所有方法均失败, file=${filePath}`);
-    return null;
+    let cleanPath = filePath.replace(/^local-media:\/\//i, '');
+    if (process.platform === 'win32' && cleanPath.startsWith('/') && /^[\/][A-Za-z]:/.test(cleanPath)) {
+        cleanPath = cleanPath.slice(1);
+    }
+
+    const signature = _mediaProbeSignature(cleanPath);
+    if (signature && _mediaInfoCache.has(signature)) return _mediaInfoCache.get(signature);
+    if (signature && _mediaInfoInflight.has(signature)) return _mediaInfoInflight.get(signature);
+
+    const promise = (async () => {
+        try {
+            const { stdout } = await runCommand('ffprobe', [
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'format=duration:stream=width,height,r_frame_rate',
+                '-of', 'json',
+                cleanPath,
+            ], { timeout: PROBE_TIMEOUT });
+            const parsed = JSON.parse(stdout || '{}');
+            const stream = Array.isArray(parsed.streams) ? parsed.streams[0] || {} : {};
+            const duration = parseFloat(parsed.format?.duration);
+            const rate = String(stream.r_frame_rate || '');
+            let frameRate = 30;
+            if (rate.includes('/')) {
+                const [num, den] = rate.split('/').map(Number);
+                if (Number.isFinite(num) && Number.isFinite(den) && den !== 0) frameRate = num / den;
+            } else if (Number.isFinite(parseFloat(rate))) {
+                frameRate = parseFloat(rate);
+            }
+            const width = Number(stream.width) || 0;
+            const height = Number(stream.height) || 0;
+            const result = {
+                duration: Number.isFinite(duration) && duration > 0 ? duration : null,
+                frame_rate: Number.isFinite(frameRate) && frameRate > 0 ? frameRate : 30,
+                resolution: width > 0 && height > 0 ? `${width}x${height}` : '',
+            };
+            if (signature && result.duration) _cacheSetBounded(_durationCache, signature, result.duration);
+            return result;
+        } catch (_) {
+            const [duration, frame_rate, resolution] = await Promise.all([
+                getDuration(cleanPath),
+                getFrameRate(cleanPath),
+                getResolution(cleanPath),
+            ]);
+            return { duration, frame_rate, resolution };
+        }
+    })();
+
+    if (signature) _mediaInfoInflight.set(signature, promise);
+    try {
+        const result = await promise;
+        if (signature) _cacheSetBounded(_mediaInfoCache, signature, result);
+        return result;
+    } finally {
+        if (signature) _mediaInfoInflight.delete(signature);
+    }
 }
 
 /** 获取媒体时长及可直接展示给用户的失败原因。 */
@@ -2506,8 +2666,10 @@ async function concatVideo(opts) {
 module.exports = {
     resolveCommand,
     runCommand,
+    deprioritizeMediaProcess: _deprioritizeMediaProcess,
     getDuration,
     getDurationDetailed,
+    getMediaInfo,
     getFrameRate,
     getResolution,
     getWaveformBinary,

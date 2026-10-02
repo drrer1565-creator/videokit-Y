@@ -16,6 +16,13 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
+function deprioritize(proc) {
+    if (!proc || !proc.pid || process.platform !== 'win32') return;
+    try {
+        os.setPriority(proc.pid, os.constants?.priority?.PRIORITY_BELOW_NORMAL ?? 10);
+    } catch (_) { }
+}
+
 const sessions = new Map();
 
 function generateId() {
@@ -1046,6 +1053,7 @@ function runFFmpegSync(ffmpeg, args, options = {}) {
         // 参数末尾，旧版只打印前 15 项会把真正的兼容性问题藏起来。
         console.log(`[WYSIWYG-BG] FFmpeg command: ${JSON.stringify([ffmpeg, ...args])}`);
         const proc = spawn(ffmpeg, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    deprioritize(proc);
         let err = '';
         let settled = false;
         const timeoutMs = Math.max(0, Number(options.timeoutMs) || 0);
@@ -1485,6 +1493,7 @@ async function startSession(opts) {
 
     console.log(`[WYSIWYG] 启动编码: ${ffmpeg} ${args.join(' ')}`);
     const proc = spawn(ffmpeg, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    deprioritize(proc);
 
     const session = {
         id: sessionId, proc, tempVideo, outputPath,
@@ -2278,6 +2287,7 @@ function _runMixFFmpeg(ffmpeg, args, session) {
         }
         console.log(`[WYSIWYG] FFmpeg 混音命令: ${args.join(' ').substring(0, 800)}`);
         const proc = spawn(ffmpeg, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    deprioritize(proc);
         let err = '';
         proc.stderr.on('data', (d) => { err = (err + d.toString()).slice(-3000); });
         proc.on('close', (code) => {

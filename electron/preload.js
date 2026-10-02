@@ -28,7 +28,20 @@ const _savePersistentPresets = () => {
     _persistentPresetLast = serialised;
     ipcRenderer.invoke('persistent-presets:save', values).catch(() => {});
 };
-setInterval(_savePersistentPresets, 2000);
+const _queuePersistentPresetSave = () => {
+    if (document.hidden) return;
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(() => _savePersistentPresets(), { timeout: 1200 });
+    } else {
+        setTimeout(_savePersistentPresets, 0);
+    }
+};
+// 预设持久化是安全网，不需要抢占视频编辑的主线程。
+// 可见窗口每 5 秒在空闲时检查一次；后台窗口跳过，关闭前仍强制保存。
+setInterval(_queuePersistentPresetSave, 5000);
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) _queuePersistentPresetSave();
+});
 window.addEventListener('beforeunload', _savePersistentPresets);
 
 // File objects passed through contextBridge can lose the identity required by

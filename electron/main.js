@@ -658,9 +658,10 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: false,
-            // Reels preview is canvas-driven. Keep its media decoders and
-            // animation clock alive when the user briefly switches apps.
-            backgroundThrottling: false,
+            // 编辑窗口失去焦点/被遮挡时允许 Chromium 正常节流。
+            // 真正的视频导出使用独立隐藏 Renderer（其 backgroundThrottling 仍为 false），
+            // 因此这里无需让每个编辑窗口在后台持续满速刷新。
+            backgroundThrottling: true,
             webSecurity: true,  // Re-enabled for security; local media loads via local-media:// protocol
             preload: path.join(__dirname, 'preload.js')
         },
@@ -2139,7 +2140,8 @@ app.whenReady().then(async () => {
                 nodeIntegration: false,
                 contextIsolation: true,
                 sandbox: false,
-                backgroundThrottling: false,
+                // 模板编辑窗口与主窗口一致：后台时节流；导出 Renderer 单独保持满速。
+                backgroundThrottling: true,
                 webSecurity: true, // Re-enabled for security; local media loads via local-media:// protocol
                 preload: path.join(__dirname, 'preload.js'),
             },

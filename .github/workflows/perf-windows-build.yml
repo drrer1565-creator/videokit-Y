@@ -1,0 +1,101 @@
+name: Performance Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'perf/v4.5.0'
+    paths:
+      - '.github/perf-build-trigger'
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_EMBED_VERSION: '3.11.9'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Setup embedded Python
+        shell: pwsh
+        run: |
+          $pythonUrl = "https://www.python.org/ftp/python/${{ env.PYTHON_EMBED_VERSION }}/python-${{ env.PYTHON_EMBED_VERSION }}-embed-amd64.zip"
+          Invoke-WebRequest -Uri $pythonUrl -OutFile "python-embed.zip"
+          New-Item -ItemType Directory -Force -Path "vendor/windows/python"
+          Expand-Archive -Path "python-embed.zip" -DestinationPath "vendor/windows/python" -Force
+          Remove-Item "python-embed.zip"
+
+          $pthFile = "vendor/windows/python/python311._pth"
+          @"
+          python311.zip
+          .
+          Lib/site-packages
+          import site
+          "@ | Set-Content $pthFile -Encoding UTF8
+
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "vendor/windows/python/get-pip.py"
+          New-Item -ItemType Directory -Force -Path "vendor/windows/python/Lib/site-packages"
+          & "vendor/windows/python/python.exe" "vendor/windows/python/get-pip.py" --no-warn-script-location
+          & "vendor/windows/python/python.exe" -m pip install -r requirements-edge.txt yt-dlp requests --target "vendor/windows/python/Lib/site-packages" --no-warn-script-location
+
+      - name: Download FFmpeg
+        shell: pwsh
+        run: |
+          $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          Invoke-WebRequest -Uri $ffmpegUrl -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg-temp" -Force
+          New-Item -ItemType Directory -Force -Path "vendor/windows/ffmpeg/bin"
+          $extractedDir = Get-ChildItem -Path "ffmpeg-temp" -Directory | Select-Object -First 1
+          Copy-Item "$($extractedDir.FullName)/bin/ffmpeg.exe" "vendor/windows/ffmpeg/bin/"
+          Copy-Item "$($extractedDir.FullName)/bin/ffprobe.exe" "vendor/windows/ffmpeg/bin/"
+          Copy-Item "$($extractedDir.FullName)/LICENSE.txt" "vendor/windows/ffmpeg/"
+          Remove-Item "ffmpeg.zip"
+          Remove-Item -Recurse -Force "ffmpeg-temp"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Package Windows portable performance build
+        shell: pwsh
+        run: |
+          npx electron-builder --win portable --x64 --publish never '-c.win.artifactName=VideoKit-Performance-Portable-${version}.${ext}'
+
+      - name: Publish performance prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v4.5.0-performance-test"
+          $exe = Get-ChildItem "dist-electron/VideoKit-Performance-Portable-*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Portable EXE not found" }
+
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe.FullName --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag $exe.FullName --prerelease --target "${{ github.sha }}" --repo "${{ github.repository }}" --title "VideoKit v4.5.0 Performance Test" --notes "Portable Windows performance test build based on v4.4.40. No installation required. This is a prerelease for performance and regression testing."
+          }
+
+      - name: Upload Windows portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoKit-Performance-Portable-Windows
+          path: dist-electron/VideoKit-Performance-Portable-*.exe
+          retention-days: 14

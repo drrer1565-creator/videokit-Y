@@ -1715,59 +1715,83 @@ function _renderBatchTable() {
 
 function _hydrateBatchVideoThumbnails(container) {
     if (!container) return;
-    const videos = container.querySelectorAll('video.rbt-thumb-previewable');
+    const videos = Array.from(container.querySelectorAll('video.rbt-thumb-previewable'));
     if (!videos.length) return;
 
-    // 使用 IntersectionObserver 延迟加载/解码滚动可视区域内的视频缩略图
+    const root = container.querySelector('.rbt-table-wrap');
+
+    // 先移除真实 src，避免 Chromium 在 IntersectionObserver 回调前就为整张表
+    // 创建解码器/读取 metadata。原始地址保存在 dataset，进入可视区再恢复。
+    videos.forEach((video) => {
+        const src = video.getAttribute('src');
+        if (src && !video.dataset.thumbSrc) video.dataset.thumbSrc = src;
+        if (src) {
+            try { video.pause(); } catch (_) {}
+            video.removeAttribute('src');
+            video.preload = 'none';
+            try { video.load(); } catch (_) {}
+        }
+    });
+
+    const hydrate = (video) => {
+        if (video.dataset.thumbHydrated === 'true') return;
+        const src = video.dataset.thumbSrc || '';
+        if (!src) return;
+
+        video.dataset.thumbHydrated = 'true';
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.src = src;
+
+        const match = src.match(/#t=([0-9.]+)/);
+        const requestedTime = match ? parseFloat(match[1]) : 0.1;
+        const seekToFrame = () => {
+            const duration = Number.isFinite(video.duration) ? video.duration : 0;
+            const maxTime = duration > 0 ? Math.max(0, duration - 0.05) : requestedTime;
+            const targetTime = Math.min(Math.max(0.1, requestedTime), maxTime);
+            try {
+                if (Number.isFinite(targetTime)) video.currentTime = targetTime;
+            } catch (_) {}
+        };
+
+        video.addEventListener('loadedmetadata', seekToFrame, { once: true });
+        video.addEventListener('loadeddata', () => {
+            try { video.pause(); } catch (_) {}
+        }, { once: true });
+        video.addEventListener('error', () => {
+            video.style.background = '#111';
+            video.title = `${video.title || ''} 缩略图加载失败`.trim();
+        }, { once: true });
+
+        try { video.load(); } catch (_) {}
+    };
+
+    const release = (video) => {
+        if (video.dataset.thumbHydrated !== 'true') return;
+        try { video.pause(); } catch (_) {}
+        video.removeAttribute('src');
+        video.preload = 'none';
+        video.dataset.thumbHydrated = 'false';
+        // load() 让 Chromium 主动释放该元素当前的媒体资源/decoder。
+        try { video.load(); } catch (_) {}
+    };
+
+    // 可见区域附近才加载；离开缓冲区后重新释放。这样长列表滚动过很多素材后，
+    // 已经看不到的缩略视频不会永久占用解码器和媒体缓存。
     const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-                const video = entry.target;
-                observer.unobserve(video); // 开始加载后停止观察
-
-                if (video.dataset.thumbHydrated === 'true') return;
-                video.dataset.thumbHydrated = 'true';
-                video.muted = true;
-                video.playsInline = true;
-                video.preload = 'metadata'; // 仅加载元数据，避免下载完整视频
-
-                const src = video.getAttribute('src') || '';
-                const match = src.match(/#t=([0-9.]+)/);
-                const requestedTime = match ? parseFloat(match[1]) : 0.1;
-                const seekToFrame = () => {
-                    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-                    const maxTime = duration > 0 ? Math.max(0, duration - 0.05) : requestedTime;
-                    const targetTime = Math.min(Math.max(0.1, requestedTime), maxTime);
-                    try {
-                        if (Number.isFinite(targetTime)) video.currentTime = targetTime;
-                    } catch (_) {}
-                };
-
-                video.addEventListener('loadedmetadata', seekToFrame, { once: true });
-                video.addEventListener('loadeddata', () => {
-                    try { video.pause(); } catch (_) {}
-                }, { once: true });
-                video.addEventListener('error', () => {
-                    video.style.background = '#111';
-                    video.title = `${video.title || ''} 缩略图加载失败`.trim();
-                }, { once: true });
-
-                try { video.load(); } catch (_) {}
-            }
+            if (entry.isIntersecting) hydrate(entry.target);
+            else release(entry.target);
         });
     }, {
-        root: container.querySelector('.rbt-table-wrap'),
-        rootMargin: '100px', // 提前 100px 缓冲加载
+        root,
+        rootMargin: '160px',
         threshold: 0.01
     });
 
-    videos.forEach((video) => {
-        if (video.dataset.thumbHydrated !== 'true') {
-            observer.observe(video);
-        }
-    });
+    videos.forEach(video => observer.observe(video));
 }
-
 function _isBatchWritableOverlay(ov) {
     return !!(ov && !ov.fixed_text);
 }
@@ -2846,7 +2870,7 @@ function _bindBatchTableEvents() {
         if (target.classList.contains('rbt-thumb-previewable')) {
             clearTimeout(previewTimeout);
             previewTimeout = setTimeout(() => {
-                const src = target.getAttribute('src');
+                const src = target.getAttribute('src') || target.dataset.thumbSrc;
                 if (!src) return;
 
                 const isVideo = target.tagName === 'VIDEO';
@@ -16756,8 +16780,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     _initBatchTable();
 
-    // 每30秒自动保存一次（安全网）
+    // 每30秒自动保存一次（安全网）。后台窗口跳过全量 tabs/tasks 序列化，
+    // 用户操作触发的即时保存与 beforeunload 保存保持不变。
     setInterval(() => {
+        if (document.hidden) return;
         if (window._reelsState && (window._reelsState.tasks || []).length > 0) {
             _batchAutoSave();
         }

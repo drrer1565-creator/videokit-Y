@@ -2287,6 +2287,7 @@ function _runMixFFmpeg(ffmpeg, args, session) {
         }
         console.log(`[WYSIWYG] FFmpeg 混音命令: ${args.join(' ').substring(0, 800)}`);
         const proc = spawn(ffmpeg, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    deprioritize(proc);
         let err = '';
         proc.stderr.on('data', (d) => { err = (err + d.toString()).slice(-3000); });
         proc.on('close', (code) => {

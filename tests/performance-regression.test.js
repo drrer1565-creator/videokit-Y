@@ -75,3 +75,13 @@ test('Windows FFmpeg child processes yield priority to the UI', () => {
     assert.match(ffmpeg, /if \(cmd === 'ffmpeg'\) _deprioritizeMediaProcess/);
     assert.match(raw, /function deprioritize\(proc\)/);
 });
+
+
+test('preview WebAudio contexts suspend while idle', () => {
+    const legacy = read('src/batch-reels.js');
+    const v2 = read('src/reels-preview-v2.js');
+    assert.match(legacy, /_audioCtx\?\.state === 'running'/);
+    assert.match(legacy, /_audioCtx\.suspend\(\)/);
+    assert.match(v2, /state\.audioCtx\?\.state === 'running'/);
+    assert.match(v2, /state\.audioCtx\.suspend\(\)/);
+});

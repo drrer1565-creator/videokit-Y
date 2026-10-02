@@ -3310,6 +3310,17 @@ function reelsUpdatePreview(immediate = false) {
     });
 }
 
+function _shouldContinueLegacyPreviewLoop() {
+    const panel = document.getElementById('batch-reels-panel');
+    if (!panel || !(panel.classList.contains('active') || panel.style.display !== 'none')) return false;
+    if (document.hidden) return false;
+
+    const master = _getPreviewMasterElement();
+    const hookVideo = document.getElementById('reels-preview-hook-video');
+    const bgmAudio = _reelsState._bgmAudioEl;
+    return _isPreviewActuallyPlaying(master, hookVideo, bgmAudio);
+}
+
 function _reelsUpdatePreviewInternal() {
     reelsRefreshAnimationParameterAvailability();
     // 独立预览打开时由 ReelsPreviewV2 自己驱动画布。旧预览即使已隐藏，过去
@@ -3831,9 +3842,13 @@ function _reelsUpdatePreviewInternal() {
         }
     }
 
-    if (_reelsState.previewRAF) cancelAnimationFrame(_reelsState.previewRAF);
-    const panel = document.getElementById('batch-reels-panel');
-    if (panel && (panel.classList.contains('active') || panel.style.display !== 'none')) {
+    if (_reelsState.previewRAF) {
+        cancelAnimationFrame(_reelsState.previewRAF);
+        _reelsState.previewRAF = null;
+    }
+    // 性能关键：暂停状态不再维持 60fps 的 Canvas 重绘循环。
+    // UI/样式/seek 变化本身都会调用 reelsUpdatePreview()；只有真正播放时才连续刷新。
+    if (_shouldContinueLegacyPreviewLoop()) {
         _reelsState.previewRAF = requestAnimationFrame(() => reelsUpdatePreview());
     }
 }
@@ -3847,6 +3862,12 @@ function reelsOnSubtitleToggleChange(checkbox) {
     }
 }
 window.reelsOnSubtitleToggleChange = reelsOnSubtitleToggleChange;
+
+// 窗口从后台恢复时，如果媒体仍处于播放状态，重新启动按需预览循环。
+// 隐藏时 _shouldContinueLegacyPreviewLoop() 会让循环自然停止。
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) reelsUpdatePreview();
+});
 
 function _drawSubtitlePreviewRange(ctx, style, canvasW, canvasH) {
     if (!ctx || !style) return;
@@ -8687,6 +8708,27 @@ function _renderTaskList() {
     // 没有来源标签页的任务通常是此前已保留在列表中的旧任务。
     // 以前它们没有标题，和新导入的批量任务混在一起时非常容易被忽略。
     const legacyGroupId = '__reels_existing_tasks__';
+
+    // 预先统计分组/文件夹队列，避免在 tasks.map() 内反复 tasks.filter() 形成 O(n²)。
+    // 大批量任务下，选择一行会重绘左侧任务列表，这里是明显的主线程热点。
+    const batchGroupStats = new Map();
+    const folderQueueStats = new Map();
+    for (const item of tasks) {
+        const groupId = item._batchTabId || legacyGroupId;
+        const groupStat = batchGroupStats.get(groupId) || { count: 0, selected: 0 };
+        groupStat.count += 1;
+        if (item._exportSelected !== false) groupStat.selected += 1;
+        batchGroupStats.set(groupId, groupStat);
+
+        const queueId = item._folderQueueId || '';
+        if (queueId) {
+            const queueStat = folderQueueStats.get(queueId) || { count: 0, selected: 0 };
+            queueStat.count += 1;
+            if (item._exportSelected !== false) queueStat.selected += 1;
+            folderQueueStats.set(queueId, queueStat);
+        }
+    }
+
     let lastBatchGroupId = null;
     let lastFolderQueueId = null;
     container.innerHTML = tasks.map((task, i) => {
@@ -8793,8 +8835,8 @@ function _renderTaskList() {
         const batchGroupCollapsed = !!_reelsState.batchGroupCollapsed[batchGroupId];
         if (batchGroupId !== lastBatchGroupId) {
             const groupName = escapeTaskText(isLegacyTask ? '已有任务（未归档）' : (task._batchTabName || '未命名分组'));
-            const groupTasks = tasks.filter(item => isLegacyTask ? !item._batchTabId : item._batchTabId === batchGroupId);
-            const groupSelected = groupTasks.filter(item => item._exportSelected !== false).length;
+            const groupStat = batchGroupStats.get(batchGroupId) || { count: 0, selected: 0 };
+            const groupSelected = groupStat.selected;
             const encodedGroupId = encodeURIComponent(batchGroupId);
             batchGroupHeader = `
                 <div class="reels-batch-group-header"
@@ -8810,7 +8852,7 @@ function _renderTaskList() {
                         style="accent-color:var(--accent-color,#7b8bef);margin:0;transform:scale(1.08);cursor:pointer;"
                         title="本组总开关：勾选则本组全部参与导出，取消则本组全部不导出">
                     <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${groupName}">${isLegacyTask ? '🕘' : '📑'} ${groupName}</span>
-                    <span style="margin-left:auto;color:#94a3b8;font-weight:400;">${groupSelected}/${groupTasks.length}</span>
+                    <span style="margin-left:auto;color:#94a3b8;font-weight:400;">${groupSelected}/${groupStat.count}</span>
                 </div>`;
             lastFolderQueueId = null;
         }
@@ -8822,9 +8864,9 @@ function _renderTaskList() {
         if (queueId && queueId !== lastFolderQueueId) {
             const queueName = escapeTaskText(task._folderQueueName || '文件夹队列');
             const queueShortId = _reelsQueueShortId(`folder:${queueId}`);
-            const queueTasks = tasks.filter(item => item._folderQueueId === queueId);
-            const queueCount = queueTasks.length;
-            const queueSelected = queueTasks.filter(item => item._exportSelected !== false).length;
+            const queueStat = folderQueueStats.get(queueId) || { count: 0, selected: 0 };
+            const queueCount = queueStat.count;
+            const queueSelected = queueStat.selected;
             const encodedQueueId = encodeURIComponent(queueId);
             folderHeader = `
                 <div class="reels-folder-queue-header" onclick="reelsToggleFolderQueue(decodeURIComponent('${encodedQueueId}'))"
@@ -9528,6 +9570,8 @@ function reelsTogglePlay() {
         if (hookVideo) hookVideo.pause();
         if (bgmAudio) bgmAudio.pause();
         if (btn) btn.textContent = '▶️';
+        // 刷新一次最终暂停帧，同时让预览循环在本帧后停止。
+        reelsUpdatePreview();
         return;
     }
 
@@ -9614,6 +9658,8 @@ function reelsTogglePlay() {
     }
     _clearPreviewSeekLock();
     if (btn) btn.textContent = '⏸️';
+    // 暂停态不再常驻 RAF，所以开始播放时显式启动连续预览循环。
+    reelsUpdatePreview();
 }
 
 /**

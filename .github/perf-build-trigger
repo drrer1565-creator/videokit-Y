@@ -5,3 +5,4 @@ purpose: verify Windows packaging after performance optimization checkpoint
 retry: fix Windows test glob and Node 22
 retry: explicit cross-platform test file
 retry: portable Windows performance build
+retry: publish portable build to GitHub prerelease

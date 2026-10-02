@@ -93,3 +93,11 @@ test('editor windows throttle in background while export renderer stays unthrott
     assert.match(main, /isolatedReelsRenderers/);
     assert.match(main, /backgroundThrottling: false/);
 });
+
+
+test('local video thumbnails are concurrency-limited', () => {
+    const src = read('electron/localOrganizerService.js');
+    assert.match(src, /const LOCAL_THUMBNAIL_CONCURRENCY = 2/);
+    assert.match(src, /withLocalThumbnailSlot/);
+    assert.match(src, /PRIORITY_BELOW_NORMAL/);
+});

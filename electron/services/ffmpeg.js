@@ -178,6 +178,50 @@ function _findFileRecursive(dir, fileName, maxDepth) {
 }
 
 // 通用媒体路径修复：搜索常见目录
+const _missingPathRepairCache = new Map();
+const MISSING_PATH_REPAIR_TTL_MS = 30 * 1000;
+
+async function _findFileRecursiveAsync(dir, fileName, maxDepth) {
+    if (maxDepth <= 0) return null;
+    let entries;
+    try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch (_) { return null; }
+
+    for (const entry of entries) {
+        if (entry.isFile() && entry.name === fileName) return path.join(dir, entry.name);
+    }
+    for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        const found = await _findFileRecursiveAsync(path.join(dir, entry.name), fileName, maxDepth - 1);
+        if (found) return found;
+    }
+    return null;
+}
+
+async function _repairMissingMediaPathAsync(filePath) {
+    const key = String(filePath || '');
+    const cached = _missingPathRepairCache.get(key);
+    if (cached && (Date.now() - cached.at) < MISSING_PATH_REPAIR_TTL_MS) return cached.value;
+
+    const bareFileName = path.basename(filePath);
+    const searchDirs = [
+        path.join(os.homedir(), 'Downloads'),
+        path.join(os.homedir(), 'Desktop'),
+        path.join(os.homedir(), 'Documents'),
+    ];
+
+    let found = null;
+    for (const searchDir of searchDirs) {
+        if (!fs.existsSync(searchDir)) continue;
+        found = await _findFileRecursiveAsync(searchDir, bareFileName, 4);
+        if (found) break;
+    }
+    _missingPathRepairCache.set(key, { at: Date.now(), value: found });
+    if (_missingPathRepairCache.size > 128) {
+        _missingPathRepairCache.delete(_missingPathRepairCache.keys().next().value);
+    }
+    return found;
+}
+
 function _resolveMediaPath(filePath) {
     const bareFileName = path.basename(filePath);
     const searchDirs = [
@@ -209,22 +253,13 @@ async function getDuration(filePath) {
     }
     filePath = cleanPath;
 
-    // 路径自动修复：如果不是绝对路径或文件不存在，尝试搜索
+    // 路径自动修复改为异步，避免主进程在大目录中同步递归扫描导致整个 UI 卡死。
+    // 同一个失效路径 30 秒内复用结果（包括“没找到”），避免预览/导出重复扫盘。
     if (filePath && (!path.isAbsolute(filePath) || !fs.existsSync(filePath))) {
-        const bareFileName = path.basename(filePath);
-        const searchDirs = [
-            path.join(os.homedir(), 'Downloads'),
-            path.join(os.homedir(), 'Desktop'),
-            path.join(os.homedir(), 'Documents'),
-        ];
-        for (const searchDir of searchDirs) {
-            if (!fs.existsSync(searchDir)) continue;
-            const found = _findFileRecursive(searchDir, bareFileName, 4);
-            if (found) {
-                console.log(`[getDuration] 自动修复路径: "${filePath}" → "${found}"`);
-                filePath = found;
-                break;
-            }
+        const found = await _repairMissingMediaPathAsync(filePath);
+        if (found) {
+            console.log(`[getDuration] 自动修复路径: "${filePath}" → "${found}"`);
+            filePath = found;
         }
     }
 

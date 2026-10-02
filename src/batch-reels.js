@@ -11628,6 +11628,21 @@ function _resolveSafeReelsExportConcurrency(requested, totalJobs, options = {}) 
     return wanted;
 }
 
+async function _prefetchTaskMediaDurationsBounded(tasks, concurrency = 4) {
+    const list = Array.isArray(tasks) ? tasks : [];
+    if (!list.length) return;
+    let cursor = 0;
+    const workerCount = Math.max(1, Math.min(concurrency, list.length));
+    const worker = async () => {
+        while (true) {
+            const index = cursor++;
+            if (index >= list.length) return;
+            await _preFetchTaskMediaDurations(list[index]);
+        }
+    };
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
 function _sanitizeReelsExportRecycleEvery(value) {
     const parsed = parseInt(value, 10);
     if (!Number.isFinite(parsed) || parsed <= 0) return REELS_EXPORT_RECYCLE_EVERY_DEFAULT;
@@ -12165,8 +12180,10 @@ async function reelsStartExport(options = {}) {
         ? Math.max(1, parseInt(resumeState.requestedConcurrency) || 1)
         : (concurrencyInput ? Math.max(1, parseInt(concurrencyInput.value) || 1) : 1);
 
-    // ═══ 导出前并行预提取所有任务的音视频时长，确保循环计算与时长判断精确 ═══
-    await Promise.all(tasks.map(t => _preFetchTaskMediaDurations(t)));
+    // ═══ 导出前预提取音视频时长 ═══
+    // 旧实现 Promise.all 会在大队列首次导出时同时拉起大量 ffprobe。
+    // 这里限制为最多 4 路；已有主进程缓存后，重复素材通常直接命中，不影响正确性。
+    await _prefetchTaskMediaDurationsBounded(tasks, 4);
 
     // ═══ 自动补齐背景循环检查（杜绝导出画面不足或黑屏） ═══
     for (const task of tasks) {

@@ -3,3 +3,4 @@ branch: perf/v4.5.0
 checkpoint: bcc14e5a0ee7546144ab033a138a3e9ed20ff31e
 purpose: verify Windows packaging after performance optimization checkpoint
 retry: fix Windows test glob and Node 22
+retry: explicit cross-platform test file

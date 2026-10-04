@@ -1,0 +1,3 @@
+Release VideoKit v4.4.42
+Fix: T-subtitle text gradients now span the whole sentence instead of restarting per word.
+Includes v4.4.41 batch-table deletion persistence fix.

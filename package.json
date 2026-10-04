@@ -17,7 +17,7 @@
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:${VITE_PORT:-5173} && node scripts/run-electron-dev.js\"",
     "electron:build": "npm run build && electron-builder",
     "start": "npm run electron:dev",
-    "test": "node --test tests/batch-table-delete-regression.test.js",
+    "test": "node --test tests/batch-table-delete-regression.test.js tests/subtitle-gradient-regression.test.js",
     "pack:mac-arm64": "npm run build && electron-builder --mac --arm64 -c.mac.artifactName=\"\\${productName}-\\${version}-macOS M-series (arm64).\\${ext}\"",
     "pack:mac-x64": "npm run build && electron-builder --mac --x64 -c.mac.artifactName=\"\\${productName}-\\${version}-macOS Intel (x64).\\${ext}\"",
     "pack:mac-universal": "npm run build && electron-builder --mac --arm64 --x64",

@@ -1,0 +1,2 @@
+Release VideoKit v4.4.41
+Fix: batch Reels default-tab task deletions no longer reappear after Apply & Close.

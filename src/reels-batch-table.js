@@ -305,7 +305,7 @@ function reelsArchiveTaskToActiveBatchTab(task) {
 }
 window.reelsArchiveTaskToActiveBatchTab = reelsArchiveTaskToActiveBatchTab;
 
-function _syncTasksToActiveTab() {
+function _syncTasksToActiveTab(options = {}) {
     const tab = _getActiveTab();
     if (!tab) return;
 
@@ -318,6 +318,15 @@ function _syncTasksToActiveTab() {
         _syncGroupedProjectionToTabs(activeTasks);
         return;
     }
+
+    // 明确的权威替换模式：批量表格当前显示的是活动分页的完整任务列表。
+    // 删除后任务数量变少时，不能把它误判成“临时子集”而保留已删除任务。
+    if (options.replace === true) {
+        tab.tasks = _cloneBatchTasks(activeTasks);
+        console.log('[BatchTable._syncTasksToActiveTab] 权威替换当前分页 tasks, 长度:', tab.tasks.length);
+        return;
+    }
+
     const tabTasks = tab.tasks || [];
 
     const tabTasksMap = new Map();
@@ -656,7 +665,9 @@ function reelsToggleBatchTable(options = {}) {
     } else {
         if (saveOnClose) {
             _applyBatchTableChanges();
-            _syncTasksToActiveTab();
+            // 当前表格是活动分页的完整任务集合；关闭保存时以它为权威，
+            // 确保删除的任务不会被旧 tab.tasks 快照复活。
+            _syncTasksToActiveTab({ replace: true });
             // 从“外部按组视图”进入表格时，只暂时载入当前标签编辑；
             // 关闭后重新投影全部原分组，不能退化为当前标签的平铺任务。
             if (_batchTableState.openedGroupedProjection) {
@@ -3296,12 +3307,12 @@ function _bindBatchTableEvents() {
             if (idx >= 0 && idx < tasks.length) tasks.splice(idx, 1);
         });
         _batchTableState.selectedRows = new Set();
-        if (typeof _syncTasksToActiveTab === 'function') _syncTasksToActiveTab();
+        if (typeof _syncTasksToActiveTab === 'function') _syncTasksToActiveTab({ replace: true });
         _skipNextApply = true;
         _renderBatchTable();
         if (typeof _renderTaskList === 'function') _renderTaskList();
         if (typeof window.reelsSaveHistory === 'function') window.reelsSaveHistory();
-        if (typeof _batchAutoSave === 'function') _batchAutoSave();
+        if (typeof _batchAutoSave === 'function') _batchAutoSave({ skipSync: true });
         if (typeof showToast === 'function') showToast(`✅ 已删除 ${indices.length} 条选中任务`, 'success');
     });
 
@@ -5902,6 +5913,9 @@ function _bindBatchTableEvents() {
             if (delBtn) {
                 const idx = parseInt(delBtn.dataset.idx);
                 window._reelsState.tasks.splice(idx, 1);
+                // 单行删除同样立即回写活动分页，避免关闭/重开后从旧 tab.tasks 恢复。
+                _syncTasksToActiveTab({ replace: true });
+                _batchAutoSave({ skipSync: true });
                 _renderBatchTable();
                 if (typeof window.reelsSaveHistory === 'function') window.reelsSaveHistory();
                 return;

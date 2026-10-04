@@ -1082,6 +1082,31 @@ class ReelsCanvasRenderer {
             startY = cy - totalH / 2;
         }
 
+        // ── 整句字幕共享文字渐变 ──
+        // 旧实现会在 _drawWord() 中按当前单词的 x/wordW 创建渐变，
+        // 导致每个单词都从第一个颜色重新开始。这里以整个字幕块创建一次
+        // CanvasGradient，后续所有单词复用同一个坐标系。
+        let gradientLeft;
+        if (advEnabled && advAlign === 'left') {
+            gradientLeft = advX;
+        } else if (advEnabled && advAlign === 'right') {
+            gradientLeft = advX + advW - renderMaxLineW;
+        } else {
+            gradientLeft = cx - renderMaxLineW / 2;
+        }
+        const sharedGradientBounds = {
+            x: gradientLeft,
+            y: startY,
+            width: Math.max(1, renderMaxLineW),
+            height: Math.max(1, totalH),
+        };
+        const sharedTextGradient = this._createTextGradient(
+            ctx, textColor, s.text_gradient_direction || 'horizontal', sharedGradientBounds
+        );
+        const sharedHighGradient = this._createTextGradient(
+            ctx, highColor, s.high_gradient_direction || s.text_gradient_direction || 'horizontal', sharedGradientBounds
+        );
+
         let wordCounter = 0;
         let twCharCounter = 0;
 
@@ -1464,17 +1489,22 @@ class ReelsCanvasRenderer {
                         const unrevealedColor = s.tw_unrevealed_color || '#808080';
                         const unrevealedStroke = s.tw_unrevealed_stroke_color || '#404040';
                         const revealedW = this._measureTextWithSpacing(ctx, typewriterPartial.revealed, letterSpacing);
+                        const revealedGradient = revealedColor === textColor ? sharedTextGradient
+                            : (revealedColor === highColor ? sharedHighGradient : null);
                         this._drawWord(ctx, typewriterPartial.revealed, drawX, wordY, revealedColor,
                             useStroke && !s.stroke_expand_enabled, revealedStroke, borderW, outlineAlpha,
-                            currentShadowBlur, shadowOffX, shadowOffY, currentShadowColor, shadowAlpha, letterSpacing, s);
+                            currentShadowBlur, shadowOffX, shadowOffY, currentShadowColor, shadowAlpha, letterSpacing, s, revealedGradient);
                         ctx.globalAlpha = globalAlpha * wordOpacity * twUnreadOpacity;
                         this._drawWord(ctx, typewriterPartial.unrevealed, drawX + revealedW, wordY, unrevealedColor,
                             useStroke && !s.stroke_expand_enabled, unrevealedStroke, borderW, outlineAlpha,
-                            currentShadowBlur, shadowOffX, shadowOffY, currentShadowColor, shadowAlpha, letterSpacing, s);
+                            currentShadowBlur, shadowOffX, shadowOffY, currentShadowColor, shadowAlpha, letterSpacing, s, null);
                     } else {
+                        const wordGradient = isHighlight
+                            ? (wordColor === highColor ? sharedHighGradient : (wordColor === textColor ? sharedTextGradient : null))
+                            : (wordColor === textColor ? sharedTextGradient : (wordColor === highColor ? sharedHighGradient : null));
                         this._drawWord(ctx, wordStr, drawX, wordY, wordColor,
                             useStroke && !s.stroke_expand_enabled, wordStrokeColor, borderW, outlineAlpha,
-                            currentShadowBlur, shadowOffX, shadowOffY, currentShadowColor, shadowAlpha, letterSpacing, s);
+                            currentShadowBlur, shadowOffX, shadowOffY, currentShadowColor, shadowAlpha, letterSpacing, s, wordGradient);
                     }
                     ctx.restore();
                 }
@@ -1705,10 +1735,34 @@ class ReelsCanvasRenderer {
         ctx.restore();
     }
 
+    _createTextGradient(ctx, fillColor, direction = 'horizontal', bounds = null) {
+        if (typeof fillColor !== 'string' || !fillColor.includes(',') || !bounds) return null;
+        const colors = fillColor.split(',').map(c => c.trim()).filter(Boolean);
+        if (colors.length < 2) return null;
+
+        const x = Number(bounds.x) || 0;
+        const y = Number(bounds.y) || 0;
+        const width = Math.max(1, Number(bounds.width) || 1);
+        const height = Math.max(1, Number(bounds.height) || 1);
+
+        let grad;
+        if (direction === 'vertical') {
+            grad = ctx.createLinearGradient(x, y, x, y + height);
+        } else if (direction === 'diagonal') {
+            grad = ctx.createLinearGradient(x, y, x + width, y + height);
+        } else {
+            grad = ctx.createLinearGradient(x, y, x + width, y);
+        }
+        colors.forEach((color, index) => {
+            grad.addColorStop(index / Math.max(1, colors.length - 1), color);
+        });
+        return grad;
+    }
+
     // ─── Helper: draw word with optional letter spacing ───
     _drawWord(ctx, text, x, y, fillColor,
         useStroke, strokeColor, strokeWidth, strokeAlpha,
-        shadowBlur, shadowOffX, shadowOffY, shadowColor, shadowAlpha, letterSpacing = 0, s = null) {
+        shadowBlur, shadowOffX, shadowOffY, shadowColor, shadowAlpha, letterSpacing = 0, s = null, sharedGradient = null) {
 
         // Speed Trail (motion blur / speed lines)
         if (s && s.speed_trail_enabled) {
@@ -1769,7 +1823,12 @@ class ReelsCanvasRenderer {
         }
 
         // Fill
-        if (typeof fillColor === 'string' && fillColor.includes(',')) {
+        // Normal T-subtitles pass one shared CanvasGradient for the whole sentence.
+        // Keep the old per-word gradient construction only as a fallback for
+        // specialized render paths that do not yet provide shared bounds.
+        if (sharedGradient) {
+            ctx.fillStyle = sharedGradient;
+        } else if (typeof fillColor === 'string' && fillColor.includes(',')) {
             const colors = fillColor.split(',').map(c => c.trim()).filter(Boolean);
             if (colors.length >= 2) {
                 const match = ctx.font.match(/(\d+)px/);

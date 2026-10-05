@@ -1,2 +1,3 @@
 VideoKit v4.4.42-beta prerelease trigger
 HDR -> SDR Rec.709 automatic detection mode
+Retrigger after fixing current media conversion UI patch and pretest hook.

@@ -11,7 +11,7 @@
     "predev": "node scripts/apply-hdr-sdr-mode.js",
     "dev": "vite",
     "pretest": "node scripts/apply-hdr-sdr-mode.js",
-    "prebuild": "node scripts/apply-hdr-sdr-mode.js && node scripts/pre-build-check.js",
+    "prebuild": "node scripts/apply-hdr-sdr-mode.js && node scripts/sync-package-lock-version.js && node scripts/pre-build-check.js",
     "build": "vite build",
     "prebuild:web": "node scripts/apply-hdr-sdr-mode.js",
     "build:web": "vite build",

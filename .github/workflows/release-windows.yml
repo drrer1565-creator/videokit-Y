@@ -4,7 +4,7 @@ on:
     tags: ['v*']
     branches: ['main']
     paths:
-      - '.github/release-4.4.42-beta'
+      - '.github/release-4.4.42-beta.1'
 permissions:
   contents: read
 concurrency:
@@ -26,6 +26,9 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+
+      - name: 🔖 设置 Beta hotfix 版本
+        run: npm version 4.4.42-beta.1 --no-git-tag-version --allow-same-version
 
       - name: 🔧 安装 Node 依赖
         run: npm ci
@@ -149,9 +152,9 @@ jobs:
       - name: 🎉 创建 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.42-beta' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.42-beta.1' }}
           target_commitish: ${{ github.sha }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.42-beta' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.42-beta.1' }}
           files: all-builds/*
           draft: false
           prerelease: true

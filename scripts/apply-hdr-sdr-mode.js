@@ -5,6 +5,7 @@ const vm = require('vm');
 const root = path.resolve(__dirname, '..');
 const ffmpegPath = path.join(root, 'electron', 'services', 'ffmpeg.js');
 const indexPath = path.join(root, 'src', 'index.html');
+const appPath = path.join(root, 'src', 'app.js');
 const testPath = path.join(root, 'tests', 'hdr-sdr-mode-regression.test.js');
 
 function fail(message) {
@@ -25,6 +26,11 @@ function findTagByDataMode(html, tagName, mode) {
   return html.match(re);
 }
 
+function hasRadio(html, name, value) {
+  const re = new RegExp(`<input\\b(?=[^>]*\\bname=["']${name}["'])(?=[^>]*\\bvalue=["']${value}["'])[^>]*>`, 'i');
+  return re.test(html);
+}
+
 let ffmpeg = fs.readFileSync(ffmpegPath, 'utf8');
 const ffmpegEol = detectEol(ffmpeg);
 
@@ -35,6 +41,15 @@ if (!ffmpeg.includes('async function probeHdrForRec709(filePath)')) {
   const helper = `/**${ffmpegEol} * 自动检测视频是否为 HDR，并返回色彩元数据。${ffmpegEol} * 优先依据 HLG/PQ transfer characteristic；同时兼容 HDR10/Dolby Vision side data，${ffmpegEol} * 以及部分只写入 BT.2020 + 10/12bit、却缺失 transfer 标记的手机素材。${ffmpegEol} */${ffmpegEol}async function probeHdrForRec709(filePath) {${ffmpegEol}    try {${ffmpegEol}        const { stdout } = await runCommand('ffprobe', [${ffmpegEol}            '-v', 'error',${ffmpegEol}            '-select_streams', 'v:0',${ffmpegEol}            '-show_streams',${ffmpegEol}            '-of', 'json',${ffmpegEol}            filePath${ffmpegEol}        ], { timeout: PROBE_TIMEOUT });${ffmpegEol}${ffmpegEol}        const stream = JSON.parse(stdout || '{}').streams?.[0] || {};${ffmpegEol}        const transfer = String(stream.color_transfer || '').toLowerCase();${ffmpegEol}        const primaries = String(stream.color_primaries || '').toLowerCase();${ffmpegEol}        const matrix = String(stream.color_space || '').toLowerCase();${ffmpegEol}        const pixelFormat = String(stream.pix_fmt || '').toLowerCase();${ffmpegEol}        const bitDepth = Number.parseInt(stream.bits_per_raw_sample || '', 10) ||${ffmpegEol}            (/p(10|12)|10le|12le|10be|12be/.test(pixelFormat) ? 10 : 8);${ffmpegEol}        const sideData = Array.isArray(stream.side_data_list) ? stream.side_data_list : [];${ffmpegEol}        const sideDataTypes = sideData.map(item => String(item?.side_data_type || '')).filter(Boolean);${ffmpegEol}${ffmpegEol}        const isHlg = transfer === 'arib-std-b67';${ffmpegEol}        const isPq = transfer === 'smpte2084' || transfer === 'smpte-st-2084';${ffmpegEol}        const hasHdrSideData = sideDataTypes.some(type =>${ffmpegEol}            /mastering display|content light level|hdr10|dovi|dolby vision/i.test(type)${ffmpegEol}        );${ffmpegEol}        const looksLikeUnlabelledHdr = primaries === 'bt2020' && bitDepth >= 10 &&${ffmpegEol}            !['bt709', 'iec61966-2-1', 'smpte170m'].includes(transfer);${ffmpegEol}        const isHdr = isHlg || isPq || hasHdrSideData || looksLikeUnlabelledHdr;${ffmpegEol}${ffmpegEol}        let hdrType = 'SDR';${ffmpegEol}        if (isHlg) hdrType = 'HLG';${ffmpegEol}        else if (isPq) hdrType = 'PQ/HDR10';${ffmpegEol}        else if (hasHdrSideData) hdrType = 'HDR metadata';${ffmpegEol}        else if (looksLikeUnlabelledHdr) hdrType = 'BT.2020 10bit HDR';${ffmpegEol}${ffmpegEol}        return { isHdr, hdrType, transfer, primaries, matrix, pixelFormat, bitDepth, sideDataTypes, probeFailed: false };${ffmpegEol}    } catch (error) {${ffmpegEol}        return {${ffmpegEol}            isHdr: false, hdrType: 'unknown', transfer: '', primaries: '', matrix: '',${ffmpegEol}            pixelFormat: '', bitDepth: 0, sideDataTypes: [], probeFailed: true,${ffmpegEol}            error: error?.message || String(error),${ffmpegEol}        };${ffmpegEol}    }${ffmpegEol}}${ffmpegEol}${ffmpegEol}`;
 
   ffmpeg = ffmpeg.slice(0, mediaMatch.index) + helper + ffmpeg.slice(mediaMatch.index);
+}
+
+if (!ffmpeg.includes('async function verifyRec709SdrOutput(filePath)')) {
+  const mediaMatch = /async function mediaConvert\s*\(/.exec(ffmpeg);
+  if (!mediaMatch) fail('找不到 mediaConvert 函数，无法加入 SDR 输出校验');
+
+  const verifier = `/**${ffmpegEol} * 校验 HDR→SDR 的最终文件，防止 UI/参数失效时静默输出 HLG/PQ。${ffmpegEol} */${ffmpegEol}async function verifyRec709SdrOutput(filePath) {${ffmpegEol}    const { stdout } = await runCommand('ffprobe', [${ffmpegEol}        '-v', 'error',${ffmpegEol}        '-select_streams', 'v:0',${ffmpegEol}        '-show_entries', 'stream=pix_fmt,color_space,color_transfer,color_primaries,bits_per_raw_sample',${ffmpegEol}        '-of', 'json',${ffmpegEol}        filePath${ffmpegEol}    ], { timeout: PROBE_TIMEOUT });${ffmpegEol}${ffmpegEol}    const stream = JSON.parse(stdout || '{}').streams?.[0] || {};${ffmpegEol}    const pixelFormat = String(stream.pix_fmt || '').toLowerCase();${ffmpegEol}    const transfer = String(stream.color_transfer || '').toLowerCase();${ffmpegEol}    const primaries = String(stream.color_primaries || '').toLowerCase();${ffmpegEol}    const matrix = String(stream.color_space || '').toLowerCase();${ffmpegEol}    const stillHdr = transfer === 'arib-std-b67' || transfer === 'smpte2084' || transfer === 'smpte-st-2084' || primaries === 'bt2020';${ffmpegEol}    const isRec709 = primaries === 'bt709' && transfer === 'bt709' && matrix === 'bt709';${ffmpegEol}    const is8Bit420 = pixelFormat === 'yuv420p';${ffmpegEol}${ffmpegEol}    if (stillHdr || !isRec709 || !is8Bit420) {${ffmpegEol}        throw new Error(\`HDR→SDR 输出校验失败：预期 yuv420p / BT.709 / BT.709 / BT.709，实际为 \${pixelFormat || '?'} / \${primaries || '?'} / \${transfer || '?'} / \${matrix || '?'}。已阻止把仍为 HDR 的文件当作 SDR 输出。\`);${ffmpegEol}    }${ffmpegEol}${ffmpegEol}    console.log(\`[HDR→SDR] 输出校验通过：\${path.basename(filePath)} | \${pixelFormat} / \${primaries} / \${transfer} / \${matrix}\`);${ffmpegEol}    return { pixelFormat, primaries, transfer, matrix };${ffmpegEol}}${ffmpegEol}${ffmpegEol}`;
+
+  ffmpeg = ffmpeg.slice(0, mediaMatch.index) + verifier + ffmpeg.slice(mediaMatch.index);
 }
 
 if (!ffmpeg.includes("'hdr_sdr': { outputExt: '_sdr709.mp4', type: 'video' }")) {
@@ -58,6 +73,17 @@ if (!ffmpeg.includes("case 'hdr_sdr': {")) {
   ffmpeg = ffmpeg.slice(0, insertAt) + hdrCase + ffmpeg.slice(insertAt);
 }
 
+if (!ffmpeg.includes('await verifyRec709SdrOutput(outputPath);')) {
+  const videoBranchStart = ffmpeg.indexOf("} else if (config.type === 'video') {");
+  if (videoBranchStart < 0) fail('找不到 video 转换分支，无法加入 HDR→SDR 输出校验');
+  const runNeedle = "        await runCommand('ffmpeg', args);";
+  const runIndex = ffmpeg.indexOf(runNeedle, videoBranchStart);
+  if (runIndex < 0) fail('找不到 video 转换完成位置，无法加入 HDR→SDR 输出校验');
+  const insertAt = runIndex + runNeedle.length;
+  const verifyCall = `${ffmpegEol}        if (mode === 'hdr_sdr') {${ffmpegEol}            await verifyRec709SdrOutput(outputPath);${ffmpegEol}        }`;
+  ffmpeg = ffmpeg.slice(0, insertAt) + verifyCall + ffmpeg.slice(insertAt);
+}
+
 try {
   new vm.Script(ffmpeg, { filename: ffmpegPath });
 } catch (error) {
@@ -78,8 +104,18 @@ if (!/data-mode=["']hdr_sdr["']/i.test(html)) {
   html = html.slice(0, h264Match.index) + hdrButton + htmlEol + h264Button + html.slice(h264Match.index + h264Button.length);
 }
 
-// 只有旧版兼容 UI 确实存在 format_mode 单选项时才补充；当前 UI 不依赖它。
-if (/name=["']format_mode["']/i.test(html) && !/name=["']format_mode["'][^>]*value=["']hdr_sdr["']/i.test(html)) {
+// 当前媒体转换侧栏只负责点击；真正的 mode 状态由 name="format-mode" 的 radio 保存。
+// 必须创建 hdr_sdr radio，否则按钮看似可点，实际 payload.mode 仍会保持 h264。
+if (!hasRadio(html, 'format-mode', 'hdr_sdr')) {
+  const h264RadioRe = /<input\b(?=[^>]*\bname=["']format-mode["'])(?=[^>]*\bvalue=["']h264["'])[^>]*>/i;
+  const h264RadioMatch = html.match(h264RadioRe);
+  if (!h264RadioMatch) fail('当前 app.js 依赖 name="format-mode"，但 index.html 中找不到 H.264 radio');
+  const hdrRadio = `<input type="radio" name="format-mode" value="hdr_sdr" hidden aria-hidden="true">`;
+  html = html.slice(0, h264RadioMatch.index) + hdrRadio + htmlEol + h264RadioMatch[0] + html.slice(h264RadioMatch.index + h264RadioMatch[0].length);
+}
+
+// 旧版兼容 UI 使用 format_mode（下划线）时也保留支持。
+if (/name=["']format_mode["']/i.test(html) && !hasRadio(html, 'format_mode', 'hdr_sdr')) {
   const h264RadioRe = /<label\b[^>]*>[\s\S]*?<input\b(?=[^>]*\bname=["']format_mode["'])(?=[^>]*\bvalue=["']h264["'])[^>]*>[\s\S]*?<\/label>/i;
   const radioMatch = html.match(h264RadioRe);
   if (radioMatch) {
@@ -93,7 +129,16 @@ const h264ButtonMatch = findTagByDataMode(html, 'button', 'h264');
 if (!hdrButtonMatch || !h264ButtonMatch) fail('HDR/H.264 菜单按钮校验失败');
 if (hdrButtonMatch.index > h264ButtonMatch.index) fail('HDR → SDR Rec.709 没有位于 H.264 之前');
 if (!/data-action=["']format["']/i.test(hdrButtonMatch[0])) fail('HDR 菜单按钮缺少 data-action="format"');
+if (!hasRadio(html, 'format-mode', 'hdr_sdr')) fail('HDR 菜单按钮没有对应的 format-mode radio，点击后不会真正切换转换模式');
 writeIfChanged(indexPath, html);
+
+const appSource = fs.readFileSync(appPath, 'utf8');
+if (!appSource.includes('input[name="format-mode"][value="${mode}"]')) {
+  fail('app.js 的媒体侧栏路由规则已变化，请同步更新 HDR 模式补丁');
+}
+if (!appSource.includes('payload.mode = formatMode')) {
+  fail('app.js 的媒体转换 payload 规则已变化，请同步更新 HDR 模式补丁');
+}
 
 const testContent = String.raw`const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -109,17 +154,26 @@ function findButton(html, mode) {
   return html.match(re);
 }
 
-test('HDR → SDR Rec.709 appears before H.264 and uses current media-format action', () => {
+function hasRadio(html, name, value) {
+  const re = new RegExp('<input\\b(?=[^>]*\\bname=["\\\']' + name + '["\\\'])(?=[^>]*\\bvalue=["\\\']' + value + '["\\\'])[^>]*>', 'i');
+  return re.test(html);
+}
+
+test('HDR → SDR button is wired to the current format-mode state', () => {
   const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8');
   const hdr = findButton(html, 'hdr_sdr');
   const h264 = findButton(html, 'h264');
   assert.ok(hdr, 'HDR mode button is missing');
   assert.ok(h264, 'H.264 mode button is missing');
   assert.ok(hdr.index < h264.index, 'HDR mode must appear before H.264');
   assert.match(hdr[0], /data-action=["']format["']/i);
+  assert.ok(hasRadio(html, 'format-mode', 'hdr_sdr'), 'HDR button has no format-mode radio, so payload.mode would stay h264');
+  assert.match(app, /input\[name="format-mode"\]\[value="\$\{mode\}"\]/);
+  assert.match(app, /payload\.mode\s*=\s*formatMode/);
 });
 
-test('HDR converter auto-detects HLG/PQ and performs real Rec.709 tone mapping', () => {
+test('HDR converter auto-detects HLG/PQ, tone maps, and verifies final Rec.709 output', () => {
   const source = fs.readFileSync(path.join(root, 'electron', 'services', 'ffmpeg.js'), 'utf8');
   assert.match(source, /probeHdrForRec709/);
   assert.match(source, /arib-std-b67/);
@@ -128,6 +182,12 @@ test('HDR converter auto-detects HLG/PQ and performs real Rec.709 tone mapping',
   assert.match(source, /zscale=t=linear:npl=100/);
   assert.match(source, /tonemap=tonemap=mobius:param=0\.3:desat=0/);
   assert.match(source, /zscale=t=bt709:m=bt709:r=tv/);
+  assert.match(source, /verifyRec709SdrOutput/);
+  assert.match(source, /await verifyRec709SdrOutput\(outputPath\)/);
+  assert.match(source, /pixelFormat === 'yuv420p'/);
+  assert.match(source, /primaries === 'bt709'/);
+  assert.match(source, /transfer === 'bt709'/);
+  assert.match(source, /matrix === 'bt709'/);
   assert.match(source, /'_sdr709\.mp4'/);
   assert.doesNotThrow(() => new vm.Script(source));
 });
@@ -139,4 +199,4 @@ test('HDR patch is idempotent when applied a second time', () => {
 `;
 fs.writeFileSync(testPath, testContent, 'utf8');
 
-console.log('[HDR-SDR patch] 完成：自动检测 HDR → SDR Rec.709 已注入，并兼容当前媒体转换 UI。');
+console.log('[HDR-SDR patch] 完成：已接通当前 format-mode 状态，并启用 HDR→SDR Rec.709 输出校验。');

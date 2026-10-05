@@ -30,6 +30,13 @@ test('single media file can be dropped directly into a background cell', () => {
   assert.ok(src.includes("await _assignSingleFile(idx, 'bg', file);"));
 });
 
+test('multi-background drop preserves the exact target row', () => {
+  const src = read('src/reels-batch-table.js');
+  assert.ok(src.includes('V4_4_43_MULTI_BG_TARGET_ROW'));
+  assert.ok(src.includes('Number.isInteger(options?.targetIdx)'));
+  assert.ok(src.includes('targetIdx: Number.isInteger(droppedRowIdx)'));
+});
+
 test('preset name dialog guards typing focus from global handlers', () => {
   const src = read('src/reels-overlay-panel.js');
   assert.ok(src.includes('V4_4_43_PRESET_NAME_FOCUS_GUARD'));
@@ -37,7 +44,7 @@ test('preset name dialog guards typing focus from global handlers', () => {
   assert.ok(src.includes('requestAnimationFrame(focusNameInput)'));
 });
 
-test('package version is 4.4.43', () => {
+test('package version is 4.4.44', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.equal(pkg.version, '4.4.43');
+  assert.equal(pkg.version, '4.4.44');
 });

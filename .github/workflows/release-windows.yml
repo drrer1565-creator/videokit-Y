@@ -16,17 +16,23 @@ jobs:
   build-windows:
     name: 🪟 Windows (x64)
     runs-on: windows-latest
-    
+
     steps:
       - name: 📥 检出代码
         uses: actions/checkout@v4
-      
+
       - name: 📦 设置 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
+
+      - name: 🔧 安装 Node 依赖
+        run: npm ci
+
+      - name: ✅ 运行回归测试
+        run: npm test
+
       - name: 🐍 下载 Python Embedded
         shell: pwsh
         run: |
@@ -53,12 +59,10 @@ jobs:
           & "vendor/windows/python/python.exe" "vendor/windows/python/get-pip.py" --no-warn-script-location
           Write-Host "🔧 安装 Python 依赖"
           & "vendor/windows/python/python.exe" -m pip install -r requirements-edge.txt yt-dlp requests --target "vendor/windows/python/Lib/site-packages" --no-warn-script-location
-          Write-Host "🔍 验证 Flask 和 flask-cors 安装:"
+          Write-Host "🔍 验证 Edge TTS 运行环境:"
           & "vendor/windows/python/python.exe" -c "import edge_tts, yt_dlp; print('Edge TTS runtime OK')"
           Write-Host "✅ Python Embedded 安装完成"
-          dir "vendor/windows/python"
-          dir "vendor/windows/python/Lib/site-packages"
-      
+
       - name: 📥 下载 FFmpeg (Windows)
         shell: pwsh
         run: |
@@ -75,22 +79,25 @@ jobs:
           Remove-Item $ffmpegZip
           Remove-Item -Recurse -Force "ffmpeg-temp"
           Write-Host "✅ FFmpeg 安装完成"
-          dir "vendor/windows/ffmpeg/bin"
-      
-      - name: 🔧 安装 Node 依赖
-        run: npm ci
 
-      - name: ✅ 运行回归测试
-        run: npm test
-      
+      - name: 🔎 验证 HDR → SDR 所需 FFmpeg 滤镜
+        shell: pwsh
+        run: |
+          $ffmpeg = "vendor/windows/ffmpeg/bin/ffmpeg.exe"
+          if (-not (Test-Path $ffmpeg)) { throw "FFmpeg executable missing: $ffmpeg" }
+          $filters = (& $ffmpeg -hide_banner -filters 2>&1 | Out-String)
+          if ($filters -notmatch '(?m)\bzscale\b') { throw "当前 FFmpeg 缺少 zscale 滤镜，HDR → SDR 无法工作" }
+          if ($filters -notmatch '(?m)\btonemap\b') { throw "当前 FFmpeg 缺少 tonemap 滤镜，HDR → SDR 无法工作" }
+          Write-Host "✅ zscale / tonemap 滤镜可用"
+
       - name: 🏗️ 构建前端
         run: npm run build
-      
+
       - name: 📦 打包 Windows x64
         run: npx electron-builder --win --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: 📤 上传 Windows 产物
         uses: actions/upload-artifact@v4
         with:
@@ -98,8 +105,9 @@ jobs:
           path: |
             dist-electron/*.zip
             dist-electron/*.exe
-            dist-electron/latest.yml
+            dist-electron/*.yml
             dist-electron/*.blockmap
+          if-no-files-found: error
           retention-days: 30
 
   create-release:
@@ -112,14 +120,14 @@ jobs:
       id-token: write
       contents: write
       attestations: write
-    
+
     steps:
       - name: 📥 下载所有产物
         uses: actions/download-artifact@v4
         with:
           path: all-builds
           merge-multiple: true
-      
+
       - name: 📋 列出文件
         run: ls -la all-builds/
 
@@ -137,7 +145,7 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'all-builds/*'
-      
+
       - name: 🎉 创建 Release
         uses: softprops/action-gh-release@v2
         with:

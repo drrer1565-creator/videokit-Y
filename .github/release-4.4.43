@@ -7,3 +7,5 @@ Fixes:
 3. Stabilize focus/typing in overlay template name dialog.
 
 HDR -> SDR experiment is not part of this release.
+
+Retrigger after making the v4.4.43 Reels patch CRLF-safe on Windows.

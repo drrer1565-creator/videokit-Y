@@ -81,6 +81,50 @@ if (!batch.includes('V4_4_43_DIRECT_BG_DROP')) {
   batch = batch.replace(dropMarker, (whole, prefix, nextComment) => prefix + lines + nextComment);
 }
 
+// 2b) Multiple files dropped on a Background cell must remember that exact row.
+// Previously merge_multi used state.selectedIdx, so dropping on row 2/3/... could still replace row 1.
+if (!batch.includes('V4_4_43_MULTI_BG_TARGET_ROW')) {
+  const eol = eolOf(batch);
+
+  if (batch.includes('async function _batchAssignFiles(files, field) {')) {
+    batch = batch.replace(
+      'async function _batchAssignFiles(files, field) {',
+      'async function _batchAssignFiles(files, field, options = {}) {'
+    );
+  }
+
+  const assignmentMarker = /([ \t]*)for \(const \[field, fieldFiles\] of assignments\) \{\r?\n[ \t]*await _batchAssignFiles\(fieldFiles, field\);\r?\n[ \t]*\}/;
+  const assignmentMatch = batch.match(assignmentMarker);
+  if (!assignmentMatch) {
+    throw new Error('Could not find external-drop batch assignment loop in reels-batch-table.js');
+  }
+  const assignmentIndent = assignmentMatch[1] || '            ';
+  const assignmentBlock = [
+    `${assignmentIndent}// V4_4_43_MULTI_BG_TARGET_ROW: preserve the row where files were actually dropped.`,
+    `${assignmentIndent}const droppedRow = dropCell?.closest('.rbt-row');`,
+    `${assignmentIndent}const droppedRowIdx = droppedRow ? parseInt(droppedRow.dataset.idx, 10) : NaN;`,
+    `${assignmentIndent}for (const [field, fieldFiles] of assignments) {`,
+    `${assignmentIndent}    await _batchAssignFiles(fieldFiles, field, {`,
+    `${assignmentIndent}        targetIdx: Number.isInteger(droppedRowIdx) && droppedRowIdx >= 0 ? droppedRowIdx : null,`,
+    `${assignmentIndent}    });`,
+    `${assignmentIndent}}`,
+  ].join(eol);
+  batch = batch.replace(assignmentMarker, assignmentBlock);
+
+  const mergeMarker = /([ \t]*)\/\/ 多素材拼接：合并所有文件到当前选中行（或第一行）的多素材背景池\r?\n[ \t]*let targetIdx = state\.selectedIdx >= 0 \? state\.selectedIdx : 0;/;
+  const mergeMatch = batch.match(mergeMarker);
+  if (!mergeMatch) {
+    throw new Error('Could not find merge_multi target-row logic in reels-batch-table.js');
+  }
+  const mergeIndent = mergeMatch[1] || '        ';
+  const mergeBlock = [
+    `${mergeIndent}// 多素材拼接：优先使用实际拖放到的行；非定点批量导入时才回退到当前选中行。`,
+    `${mergeIndent}const requestedTargetIdx = Number.isInteger(options?.targetIdx) ? options.targetIdx : null;`,
+    `${mergeIndent}let targetIdx = requestedTargetIdx != null ? requestedTargetIdx : (state.selectedIdx >= 0 ? state.selectedIdx : 0);`,
+  ].join(eol);
+  batch = batch.replace(mergeMarker, mergeBlock);
+}
+
 if (!batch.includes('files.sort(_naturalSortByName);')) {
   throw new Error('Natural numeric sorting patch was not applied');
 }
@@ -89,6 +133,12 @@ if (batch.includes("files.sort((a, b) => (a.name || '').localeCompare(b.name || 
 }
 if (!batch.includes('V4_4_43_DIRECT_BG_DROP') || !batch.includes("await _assignSingleFile(idx, 'bg', file);")) {
   throw new Error('Direct Background-cell drop patch was not applied completely');
+}
+if (!batch.includes('V4_4_43_MULTI_BG_TARGET_ROW') || !batch.includes('async function _batchAssignFiles(files, field, options = {}) {')) {
+  throw new Error('Multi-background target-row patch was not applied completely');
+}
+if (!batch.includes('Number.isInteger(options?.targetIdx)') || !batch.includes('targetIdx: Number.isInteger(droppedRowIdx)')) {
+  throw new Error('Multi-background target row is not carried from drop handler to merge_multi');
 }
 assertSyntax(batch, batchPath);
 writeIfChanged(batchPath, batchBefore, batch);

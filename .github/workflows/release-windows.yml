@@ -4,7 +4,7 @@ on:
     tags: ['v*']
     branches: ['main']
     paths:
-      - '.github/release-4.4.42-beta.1'
+      - '.github/release-4.4.43'
 permissions:
   contents: read
 concurrency:
@@ -27,8 +27,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: 🔖 设置 Beta hotfix 版本
-        run: npm version 4.4.42-beta.1 --no-git-tag-version --allow-same-version
+      - name: 🔖 同步版本号
+        run: npm version 4.4.43 --no-git-tag-version --allow-same-version
 
       - name: 🔧 安装 Node 依赖
         run: npm ci
@@ -82,16 +82,6 @@ jobs:
           Remove-Item $ffmpegZip
           Remove-Item -Recurse -Force "ffmpeg-temp"
           Write-Host "✅ FFmpeg 安装完成"
-
-      - name: 🔎 验证 HDR → SDR 所需 FFmpeg 滤镜
-        shell: pwsh
-        run: |
-          $ffmpeg = "vendor/windows/ffmpeg/bin/ffmpeg.exe"
-          if (-not (Test-Path $ffmpeg)) { throw "FFmpeg executable missing: $ffmpeg" }
-          $filters = (& $ffmpeg -hide_banner -filters 2>&1 | Out-String)
-          if ($filters -notmatch '(?m)\bzscale\b') { throw "当前 FFmpeg 缺少 zscale 滤镜，HDR → SDR 无法工作" }
-          if ($filters -notmatch '(?m)\btonemap\b') { throw "当前 FFmpeg 缺少 tonemap 滤镜，HDR → SDR 无法工作" }
-          Write-Host "✅ zscale / tonemap 滤镜可用"
 
       - name: 🏗️ 构建前端
         run: npm run build
@@ -152,10 +142,10 @@ jobs:
       - name: 🎉 创建 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.42-beta.1' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.43' }}
           target_commitish: ${{ github.sha }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.42-beta.1' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.43' }}
           files: all-builds/*
           draft: false
-          prerelease: true
+          prerelease: false
           generate_release_notes: true

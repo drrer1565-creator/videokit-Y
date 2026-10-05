@@ -1,0 +1,9 @@
+VideoKit v4.4.44 release trigger
+
+Includes:
+- Natural numeric ordering for batch Reels imports.
+- Single background media can be dropped into a specific row.
+- Multi-background merge preserves the exact row where multiple files were dropped.
+- Overlay template name input focus stabilization.
+
+This is the Windows v4.4.44 production release trigger.

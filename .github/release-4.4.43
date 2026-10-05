@@ -1,0 +1,9 @@
+VideoKit v4.4.43 release trigger
+
+Based on v4.4.42 stable branch behavior.
+Fixes:
+1. Natural numeric ordering for batch Reels audio/subtitle imports (1,2,...10 instead of 1,10,11,...2).
+2. Allow dropping a single video/image directly into a specific row's background media cell.
+3. Stabilize focus/typing in overlay template name dialog.
+
+HDR -> SDR experiment is not part of this release.

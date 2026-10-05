@@ -41,27 +41,35 @@ if (!ffmpeg.includes("case 'hdr_sdr': {")) {
 writeIfChanged(ffmpegPath, ffmpeg);
 
 let html = fs.readFileSync(indexPath, 'utf8');
-if (!html.includes('data-media-mode="hdr_sdr"')) {
-  const h264Match = html.match(/<button\s+type="button"\s+class="tool-button"\s+data-media-mode="h264"[\s\S]*?<\/button>/);
-  if (!h264Match) fail('找不到 H.264 菜单按钮，无法把 HDR 模式放到第一个位置');
 
-  const h264Button = h264Match[0];
-  let hdrButton = h264Button
-    .replace('data-media-mode="h264"', 'data-media-mode="hdr_sdr"')
-    .replace(/data-tooltip="[^"]*"/, 'data-tooltip="自动检测 HLG/PQ/HDR10；HDR 转 SDR Rec.709，普通 SDR 自动跳过 Tone Mapping"')
-    .replace(/<span class="tool-label">[\s\S]*?<\/span>/, '<span class="tool-label">HDR → SDR Rec.709</span>');
-
-  html = html.replace(h264Button, `${hdrButton}\n${h264Button}`);
+// 当前媒体转换 UI 使用 sidebar-item + data-mode；把 HDR 模式插在 H.264 前面。
+if (!html.includes('data-category="video-format" data-mode="hdr_sdr"')) {
+  const sidebarRe = /<button\s+class="sidebar-item\s+active"\s+data-category="video-format"\s+data-mode="h264">H\.264<\/button>/;
+  const match = html.match(sidebarRe);
+  if (!match) fail('找不到视频格式转换中的 H.264 菜单按钮');
+  const h264Button = match[0];
+  const hdrButton = '<button class="sidebar-item" data-category="video-format" data-mode="hdr_sdr" title="自动检测 HLG/PQ/HDR10；HDR 转 SDR Rec.709，普通 SDR 自动跳过 Tone Mapping">HDR → SDR Rec.709</button>';
+  html = html.replace(h264Button, `${hdrButton}\n              ${h264Button}`);
 }
 
-const hdrPos = html.indexOf('data-media-mode="hdr_sdr"');
-const h264Pos = html.indexOf('data-media-mode="h264"');
+// 同步补上旧版/兼容用的格式单选项，保持 H.264 仍为默认选项。
+if (!html.includes('name="format_mode" value="hdr_sdr"')) {
+  const radioRe = /<label class="mode-option">\s*<input type="radio" name="format_mode" value="h264" checked>\s*<span>H\.264 \(MP4\)<\/span>\s*<\/label>/;
+  const match = html.match(radioRe);
+  if (!match) fail('找不到 H.264 格式单选项');
+  const h264Radio = match[0];
+  const hdrRadio = `<label class="mode-option">\n                      <input type="radio" name="format_mode" value="hdr_sdr">\n                      <span>HDR → SDR Rec.709</span>\n                    </label>`;
+  html = html.replace(h264Radio, `${hdrRadio}\n                    ${h264Radio}`);
+}
+
+const hdrPos = html.indexOf('data-category="video-format" data-mode="hdr_sdr"');
+const h264Pos = html.indexOf('data-category="video-format" data-mode="h264"');
 if (hdrPos < 0 || h264Pos < 0 || hdrPos > h264Pos) {
   fail('HDR → SDR Rec.709 没有位于视频格式转换列表的第一个位置');
 }
 writeIfChanged(indexPath, html);
 
-const testContent = `const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst fs = require('node:fs');\nconst path = require('node:path');\n\nconst root = path.resolve(__dirname, '..');\n\ntest('HDR → SDR Rec.709 appears before H.264 in the video conversion menu', () => {\n  const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');\n  const hdr = html.indexOf('data-media-mode="hdr_sdr"');\n  const h264 = html.indexOf('data-media-mode="h264"');\n  assert.ok(hdr >= 0, 'HDR mode button is missing');\n  assert.ok(h264 >= 0, 'H.264 mode button is missing');\n  assert.ok(hdr < h264, 'HDR mode must be the first video conversion option');\n});\n\ntest('HDR converter auto-detects HLG/PQ and performs real Rec.709 tone mapping', () => {\n  const source = fs.readFileSync(path.join(root, 'electron', 'services', 'ffmpeg.js'), 'utf8');\n  assert.match(source, /probeHdrForRec709/);\n  assert.match(source, /arib-std-b67/);\n  assert.match(source, /smpte2084/);\n  assert.match(source, /zscale=t=linear:npl=100/);\n  assert.match(source, /tonemap=tonemap=mobius:param=0\\.3:desat=0/);\n  assert.match(source, /zscale=t=bt709:m=bt709:r=tv/);\n  assert.match(source, /'_sdr709\\.mp4'/);\n});\n`;
+const testContent = `const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst fs = require('node:fs');\nconst path = require('node:path');\n\nconst root = path.resolve(__dirname, '..');\n\ntest('HDR → SDR Rec.709 appears before H.264 in the video conversion menu', () => {\n  const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');\n  const hdr = html.indexOf('data-category="video-format" data-mode="hdr_sdr"');\n  const h264 = html.indexOf('data-category="video-format" data-mode="h264"');\n  assert.ok(hdr >= 0, 'HDR mode button is missing');\n  assert.ok(h264 >= 0, 'H.264 mode button is missing');\n  assert.ok(hdr < h264, 'HDR mode must be the first video conversion option');\n  assert.match(html, /name="format_mode" value="hdr_sdr"/);\n});\n\ntest('HDR converter auto-detects HLG/PQ and performs real Rec.709 tone mapping', () => {\n  const source = fs.readFileSync(path.join(root, 'electron', 'services', 'ffmpeg.js'), 'utf8');\n  assert.match(source, /probeHdrForRec709/);\n  assert.match(source, /arib-std-b67/);\n  assert.match(source, /smpte2084/);\n  assert.match(source, /zscale=t=linear:npl=100/);\n  assert.match(source, /tonemap=tonemap=mobius:param=0\\.3:desat=0/);\n  assert.match(source, /zscale=t=bt709:m=bt709:r=tv/);\n  assert.match(source, /'_sdr709\\.mp4'/);\n});\n`;
 fs.writeFileSync(testPath, testContent, 'utf8');
 
 console.log('[HDR-SDR patch] 完成：已加入自动检测 HDR → SDR Rec.709 模式，并置于视频格式转换第一项。');

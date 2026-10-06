@@ -1,3 +1,4 @@
 VideoKit v4.4.46 release trigger
 
 BT.2020 export color conversion before subtitle rendering.
+Retry after Windows CRLF patch fix.

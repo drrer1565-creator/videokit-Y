@@ -1,6 +1,6 @@
 {
   "name": "videokit",
-  "version": "4.4.45",
+  "version": "4.4.46",
   "description": "视频工具包-批量：音频生成-reels视频制作-多媒体转换",
   "author": {
     "name": "TimCode",
@@ -8,13 +8,13 @@
   },
   "main": "electron/main.js",
   "scripts": {
-    "predev": "node scripts/apply-v4.4.43-reels-fixes.js",
+    "predev": "node scripts/apply-v4.4.43-reels-fixes.js && node scripts/apply-v4.4.46-export-color.js",
     "dev": "vite",
-    "pretest": "node scripts/apply-v4.4.43-reels-fixes.js",
+    "pretest": "node scripts/apply-v4.4.43-reels-fixes.js && node scripts/apply-v4.4.46-export-color.js",
     "test": "node --test tests/batch-table-delete-regression.test.js tests/subtitle-gradient-regression.test.js tests/reels-4.4.43-regression.test.js",
-    "prebuild": "node scripts/apply-v4.4.43-reels-fixes.js && node scripts/pre-build-check.js",
+    "prebuild": "node scripts/apply-v4.4.43-reels-fixes.js && node scripts/apply-v4.4.46-export-color.js && node scripts/pre-build-check.js",
     "build": "vite build",
-    "prebuild:web": "node scripts/apply-v4.4.43-reels-fixes.js",
+    "prebuild:web": "node scripts/apply-v4.4.43-reels-fixes.js && node scripts/apply-v4.4.46-export-color.js",
     "build:web": "vite build",
     "build:desktop": "npm run build && electron-builder",
     "build:all": "npm run build && echo '✅ 网站版本已生成到 dist/' && electron-builder && echo '✅ 桌面版本已生成到 dist-electron/'",

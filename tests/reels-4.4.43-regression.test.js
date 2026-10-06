@@ -37,6 +37,17 @@ test('multi-background drop preserves the exact target row', () => {
   assert.ok(src.includes('targetIdx: Number.isInteger(droppedRowIdx)'));
 });
 
+test('batch video thumbnails are static and hover keeps the original video source', () => {
+  const src = read('src/reels-batch-table.js');
+  const preload = read('electron/preload.js');
+  assert.ok(src.includes('V4_4_45_STATIC_BATCH_VIDEO_THUMBS'));
+  assert.ok(src.includes('_RBT_STATIC_THUMB_MAX_CONCURRENCY = 3'));
+  assert.ok(src.includes('img.dataset.videoSrc = videoSrc'));
+  assert.ok(src.includes('target.dataset.videoSrc'));
+  assert.ok(src.includes('window.electronAPI?.localFiles?.getVideoThumbnail'));
+  assert.ok(preload.includes("getVideoThumbnail: (filePath, size) => ipcRenderer.invoke('local:video-thumbnail', localMediaUrlToPath(filePath), size)"));
+});
+
 test('preset name dialog guards typing focus from global handlers', () => {
   const src = read('src/reels-overlay-panel.js');
   assert.ok(src.includes('V4_4_43_PRESET_NAME_FOCUS_GUARD'));

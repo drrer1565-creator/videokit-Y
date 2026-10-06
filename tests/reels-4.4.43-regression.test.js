@@ -48,6 +48,31 @@ test('batch video thumbnails are static and hover keeps the original video sourc
   assert.ok(preload.includes("getVideoThumbnail: (filePath, size) => ipcRenderer.invoke('local:video-thumbnail', localMediaUrlToPath(filePath), size)"));
 });
 
+test('BT.2020 export conversion runs before subtitles and leaves preview untouched', () => {
+  const ffmpeg = read('electron/services/ffmpeg.js');
+  const raw = read('electron/services/ffmpeg-rawvideo.js');
+  const main = read('electron/main.js');
+  const color = require(path.join(root, 'electron', 'services', 'export-color-space.js'));
+
+  assert.ok(ffmpeg.includes('V4_4_46_EXPORT_COLOR_BEFORE_SUBTITLES'));
+  assert.ok(raw.includes('V4_4_46_WYSIWYG_EXPORT_COLOR'));
+  assert.ok(main.includes('V4_4_46_BURN_SUBTITLES_COLOR_FIRST'));
+  assert.ok(raw.includes('exportColorAwareFilter(clip.path'));
+  assert.ok(raw.includes('normalizedDirectBackgroundFilter(0, opts.alphaOverlayBgPath'));
+  assert.equal(read('src/batch-reels.js').includes('getExportColorPlan('), false, 'preview/import flow must not probe or convert color');
+
+  const hdr = color.buildBt2020ToBt709Filter({ isBt2020: true, isHdr: true });
+  assert.ok(hdr.includes('zscale=t=linear'));
+  assert.ok(hdr.includes('tonemap=tonemap=hable'));
+  assert.ok(hdr.includes('zscale=t=709:m=709:r=limited'));
+
+  const sdr2020 = color.buildBt2020ToBt709Filter({ isBt2020: true, isHdr: false });
+  assert.ok(sdr2020.includes('zscale=p=709:t=709:m=709:r=limited'));
+  assert.equal(sdr2020.includes('tonemap='), false, 'SDR BT.2020 must not receive HDR tone mapping');
+
+  assert.equal(color.buildBt2020ToBt709Filter({ isBt2020: false, isHdr: false }), '');
+});
+
 test('preset name dialog guards typing focus from global handlers', () => {
   const src = read('src/reels-overlay-panel.js');
   assert.ok(src.includes('V4_4_43_PRESET_NAME_FOCUS_GUARD'));
@@ -55,7 +80,7 @@ test('preset name dialog guards typing focus from global handlers', () => {
   assert.ok(src.includes('requestAnimationFrame(focusNameInput)'));
 });
 
-test('package version is 4.4.45', () => {
+test('package version is 4.4.46', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.equal(pkg.version, '4.4.45');
+  assert.equal(pkg.version, '4.4.46');
 });

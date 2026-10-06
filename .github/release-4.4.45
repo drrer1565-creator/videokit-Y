@@ -1,0 +1,8 @@
+VideoKit v4.4.45 release trigger
+
+Includes batch-table performance improvements:
+- cached static thumbnails for video cells
+- hover creates only one live video preview
+- thumbnail generation concurrency limited to 3
+- reuse existing FFmpeg thumbnail cache
+- retain previous 4.4.44 Reels batch fixes

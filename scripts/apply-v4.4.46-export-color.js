@@ -7,7 +7,10 @@ const ffmpegPath = path.join(root, 'electron', 'services', 'ffmpeg.js');
 const rawPath = path.join(root, 'electron', 'services', 'ffmpeg-rawvideo.js');
 const mainPath = path.join(root, 'electron', 'main.js');
 
-function read(file) { return fs.readFileSync(file, 'utf8'); }
+// Normalize checked-out source to LF before applying exact string markers.
+// Git for Windows may checkout text files as CRLF, which previously caused
+// valid markers to be missed during npm test / release packaging.
+function read(file) { return fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n'); }
 function write(file, before, after) {
   if (before !== after) {
     fs.writeFileSync(file, after, 'utf8');

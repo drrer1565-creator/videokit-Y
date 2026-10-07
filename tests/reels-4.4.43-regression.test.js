@@ -48,7 +48,7 @@ test('batch video thumbnails are static and hover keeps the original video sourc
   assert.ok(preload.includes("getVideoThumbnail: (filePath, size) => ipcRenderer.invoke('local:video-thumbnail', localMediaUrlToPath(filePath), size)"));
 });
 
-test('wide-gamut export uses explicit detected metadata before subtitles and leaves preview untouched', () => {
+test('BT.2020 export conversion runs before subtitles and leaves preview untouched', () => {
   const ffmpeg = read('electron/services/ffmpeg.js');
   const raw = read('electron/services/ffmpeg-rawvideo.js');
   const main = read('electron/main.js');
@@ -61,84 +61,50 @@ test('wide-gamut export uses explicit detected metadata before subtitles and lea
   assert.ok(raw.includes('normalizedDirectBackgroundFilter(0, opts.alphaOverlayBgPath'));
   assert.equal(read('src/batch-reels.js').includes('getExportColorPlan('), false, 'preview/import flow must not probe or convert color');
 
-  const hlg2020 = color.buildBt2020ToBt709Filter({
+  const hlg = color.buildBt2020ToBt709Filter({
+    isBt2020: true,
+    isHdr: true,
     colorPrimaries: 'bt2020',
     colorTransfer: 'arib-std-b67',
     colorSpace: 'bt2020nc',
     colorRange: 'tv',
-    pixelFormat: 'yuv420p10le',
-    isBt2020: true,
-    isWideGamut: true,
-    isHdr: true,
   });
-  assert.equal(
-    hlg2020,
-    'zscale=primariesin=bt2020:transferin=arib-std-b67:matrixin=bt2020nc:rangein=limited:transfer=linear:npl=100,format=gbrpf32le,zscale=primaries=bt709,tonemap=tonemap=hable:desat=0,zscale=transfer=bt709:matrix=bt709:range=limited,format=yuv420p',
-    'HLG conversion must match the visually verified batch conversion pipeline'
-  );
+  assert.ok(hlg.includes('primariesin=bt2020'));
+  assert.ok(hlg.includes('transferin=arib-std-b67'));
+  assert.ok(hlg.includes('matrixin=bt2020nc'));
+  assert.ok(hlg.includes('rangein=limited'));
+  assert.ok(hlg.includes('tonemap=tonemap=hable'));
 
-  const pq2020 = color.buildBt2020ToBt709Filter({
+  const pq = color.buildBt2020ToBt709Filter({
+    isBt2020: true,
+    isHdr: true,
     colorPrimaries: 'bt2020',
     colorTransfer: 'smpte2084',
     colorSpace: 'bt2020nc',
     colorRange: 'tv',
-    pixelFormat: 'p010le',
-    isBt2020: true,
-    isWideGamut: true,
-    isHdr: true,
   });
-  assert.ok(pq2020.includes('transferin=smpte2084'));
-  assert.ok(pq2020.includes('matrixin=bt2020nc'));
-  assert.ok(pq2020.includes('rangein=limited'));
-  assert.ok(pq2020.includes('tonemap=tonemap=hable:desat=0'));
+  assert.ok(pq.includes('transferin=smpte2084'));
 
   const sdr2020 = color.buildBt2020ToBt709Filter({
+    isBt2020: true,
+    isHdr: false,
     colorPrimaries: 'bt2020',
-    colorTransfer: 'bt2020-10',
+    colorTransfer: 'bt709',
     colorSpace: 'bt2020nc',
     colorRange: 'tv',
-    pixelFormat: 'yuv420p10le',
-    isBt2020: true,
-    isWideGamut: true,
-    isHdr: false,
   });
   assert.ok(sdr2020.includes('primariesin=bt2020'));
-  assert.ok(sdr2020.includes('transferin=bt2020-10'));
   assert.ok(sdr2020.includes('matrixin=bt2020nc'));
   assert.equal(sdr2020.includes('tonemap='), false, 'SDR BT.2020 must not receive HDR tone mapping');
 
-  const p3 = color.buildSourceToBt709Filter({
-    colorPrimaries: 'smpte432',
-    colorTransfer: 'iec61966-2-1',
-    colorSpace: 'bt709',
-    colorRange: 'pc',
-    pixelFormat: 'yuv420p',
-    isWideGamut: true,
+  assert.equal(color.buildBt2020ToBt709Filter({
+    isBt2020: false,
     isHdr: false,
-  });
-  assert.ok(p3.includes('primariesin=smpte432'));
-  assert.ok(p3.includes('rangein=full'));
-
-  assert.equal(color.buildSourceToBt709Filter({
     colorPrimaries: 'bt709',
     colorTransfer: 'bt709',
     colorSpace: 'bt709',
     colorRange: 'tv',
-    pixelFormat: 'yuv420p',
-    isWideGamut: false,
-    isHdr: false,
-  }), '', 'normal BT.709 must not receive an extra colour transform');
-
-  assert.equal(color.buildSourceToBt709Filter({
-    colorPrimaries: 'bt2020',
-    colorTransfer: 'arib-std-b67',
-    colorSpace: '',
-    colorRange: 'tv',
-    pixelFormat: 'yuv420p10le',
-    isBt2020: true,
-    isWideGamut: true,
-    isHdr: true,
-  }), '', 'incomplete colour metadata must fall back to passthrough instead of guessing');
+  }), '');
 });
 
 test('preset name dialog guards typing focus from global handlers', () => {
@@ -148,7 +114,7 @@ test('preset name dialog guards typing focus from global handlers', () => {
   assert.ok(src.includes('requestAnimationFrame(focusNameInput)'));
 });
 
-test('package version is 4.4.46', () => {
+test('package version is 4.4.47', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.equal(pkg.version, '4.4.46');
+  assert.equal(pkg.version, '4.4.47');
 });

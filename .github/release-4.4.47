@@ -1,0 +1,4 @@
+VideoKit v4.4.47 release trigger
+
+Metadata-aware wide-gamut to BT.709 conversion before subtitle rendering.
+HLG/PQ/BT.2020 SDR/P3 handling with BT.709 passthrough and safe fallback for incomplete metadata.

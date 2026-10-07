@@ -205,7 +205,7 @@ function checkCaseSensitiveImports() {
     files.forEach(file => {
         // Patch scripts contain JavaScript source code inside strings. Scanning those strings as
         // real imports creates false positives because their relative paths belong to the target file.
-        if (file.includes('scripts/apply-v4.4.46-export-color.js')) return;
+        if (path.basename(file) === 'apply-v4.4.46-export-color.js') return;
 
         const content = fs.readFileSync(file, 'utf8');
         const fileDir = path.dirname(file);

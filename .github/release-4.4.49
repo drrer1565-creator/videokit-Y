@@ -1,0 +1,6 @@
+VideoKit v4.4.49 release trigger
+
+- T-subtitle: six adjustable character animation presets in 5. 动画引擎
+- 逐字上浮 / 逐字弹性放大 / 逐字波浪 / 逐字落下回弹 / 逐字挤压弹跳 / 中心扩散
+- Adjustable animation strength, per-character duration, and character stagger
+- Character animation parameters are preset-safe and compatible with subtitle gradients, uppercase mode, outlines, and shadows

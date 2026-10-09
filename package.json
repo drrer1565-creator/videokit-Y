@@ -116,8 +116,11 @@
             "**/*.json",
             "!uploads/**",
             "!**/__pycache__/**",
-            "!**/test/**",
-            "!**/tests/**"
+            "!*.py",
+            "!elevenlabs_settings.json",
+            "!gladia_keys.json",
+            "!gemini_keys.json",
+            "!transcription_providers.json"
           ]
         },
         {

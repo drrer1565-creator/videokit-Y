@@ -15,7 +15,10 @@ test('normal T-subtitles keep whole-sentence gradient as the default', () => {
   assert.match(src, /const gradientScope = s\.text_gradient_scope === 'word' \? 'word' : 'sentence'/);
   assert.match(src, /const sharedTextGradient = gradientScope === 'sentence' \? this\._createTextGradient/);
   assert.match(src, /const sharedHighGradient = gradientScope === 'sentence' \? this\._createTextGradient/);
-  assert.match(src, /sharedGradient = null\)/);
+  // Character-animation support may append renderer-only parameters after the
+  // shared gradient argument. Keep this regression focused on the gradient
+  // default rather than the exact end of the _drawWord() signature.
+  assert.match(src, /sharedGradient = null(?:,\s*charAnim = null)?\)/);
   assert.match(src, /if \(sharedGradient\) \{\s*ctx\.fillStyle = sharedGradient;/);
 });
 

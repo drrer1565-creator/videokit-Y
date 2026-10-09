@@ -1,0 +1,4 @@
+VideoKit v4.4.48 release trigger
+
+- T-subtitle gradient scope: whole sentence / per-word
+- T-subtitle non-destructive uppercase mode, preset-safe

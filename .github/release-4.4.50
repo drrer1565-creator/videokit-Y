@@ -1,0 +1,6 @@
+VideoKit v4.4.50 Windows release trigger
+
+Phase 1 render performance upgrade:
+- conservative adaptive libx264 CPU thread allocation with automatic fallback
+- tuned NVIDIA NVENC profile with compatibility fallback
+- transferable MessagePort frame pipeline with bounded in-flight frames and IPC fallback

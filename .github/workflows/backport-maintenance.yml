@@ -1,4 +1,4 @@
-name: Backport repository maintenance
+name: Validate upstream 4.4.42 backports
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
     paths: ['.github/workflows/backport-maintenance.yml']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -17,19 +17,17 @@ jobs:
         with:
           ref: feature/upstream-4.4.42-security-backports
 
-      - name: Apply upstream maintenance pins
-        run: node scripts/apply-upstream-4.4.42-repo-maintenance.cjs
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
 
-      - name: Commit generated lockfile changes
-        shell: bash
-        run: |
-          # This one-time helper commits only package-lock.json; workflow files are updated via the GitHub API.
-          if git diff --quiet -- package-lock.json; then
-            echo "No lockfile changes required"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "security: apply upstream 4.4.42 dependency pins"
-          git push origin HEAD:feature/upstream-4.4.42-security-backports
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run regression tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build

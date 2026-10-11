@@ -5,7 +5,10 @@ const root = path.resolve(__dirname, '..');
 const localRequire = (modulePath) => "require(" + "'" + modulePath + "'" + ")";
 
 function read(rel) {
-    return fs.readFileSync(path.join(root, rel), 'utf8');
+    // GitHub's Windows runners may check files out with CRLF.  All patch
+    // anchors below are intentionally written with LF, so normalize input
+    // before matching to keep this idempotent on Windows and Unix alike.
+    return fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n?/g, '\n');
 }
 
 function write(rel, content) {

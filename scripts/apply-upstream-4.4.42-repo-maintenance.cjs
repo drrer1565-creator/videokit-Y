@@ -27,8 +27,12 @@ for (const rel of [
   fs.writeFileSync(file, src, 'utf8');
 }
 
+const packageVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const lockPath = path.join(root, 'package-lock.json');
 const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+lock.version = packageVersion;
+if (lock.packages?.['']) lock.packages[''].version = packageVersion;
+
 const updates = {
   'node_modules/http-cache-semantics': {
     version: '4.3.0',

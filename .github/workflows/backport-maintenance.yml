@@ -23,6 +23,7 @@ jobs:
       - name: Commit generated lockfile changes
         shell: bash
         run: |
+          # This one-time helper commits only package-lock.json; workflow files are updated via the GitHub API.
           if git diff --quiet -- package-lock.json; then
             echo "No lockfile changes required"
             exit 0

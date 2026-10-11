@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
+const localRequire = (modulePath) => `require(${JSON.stringify(modulePath)})`;
 
 function read(rel) {
     return fs.readFileSync(path.join(root, rel), 'utf8');
@@ -23,7 +24,7 @@ function patchApiRouter() {
     src = replaceOnce(
         src,
         "const { ipcMain } = require('electron');",
-        "const { ipcMain } = require('electron');\nconst { assertTrustedRenderer } = require('./services/trustedRenderer');",
+        "const { ipcMain } = require('electron');\nconst { assertTrustedRenderer } = " + localRequire('./services/trustedRenderer') + ';',
         'apiRouter trusted import',
     );
     src = replaceOnce(
@@ -47,7 +48,7 @@ function patchLocalOrganizer() {
     src = replaceOnce(
         src,
         "const { app, dialog, shell, clipboard, nativeImage } = require('electron');",
-        "const { assertTrustedRenderer } = require('./services/trustedRenderer');\nconst { app, dialog, shell, clipboard, nativeImage } = require('electron');",
+        'const { assertTrustedRenderer } = ' + localRequire('./services/trustedRenderer') + ";\nconst { app, dialog, shell, clipboard, nativeImage } = require('electron');",
         'local organizer trusted import',
     );
     src = replaceOnce(
@@ -62,10 +63,12 @@ function patchLocalOrganizer() {
 function patchMain() {
     const rel = 'electron/main.js';
     let src = read(rel);
+    const updaterImport = 'const { initAutoUpdater } = ' + localRequire('./updater') + ';';
+    const trustedImport = 'const { assertTrustedRenderer, isTrustedRendererUrl } = ' + localRequire('./services/trustedRenderer') + ';';
     src = replaceOnce(
         src,
-        "const { initAutoUpdater } = require('./updater');",
-        "const { initAutoUpdater } = require('./updater');\n\nconst { assertTrustedRenderer, isTrustedRendererUrl } = require('./services/trustedRenderer');\nfunction handleTrusted(channel, listener) {\n    return ipcMain.handle(channel, (event, ...args) => { assertTrustedRenderer(event); return listener(event, ...args); });\n}",
+        updaterImport,
+        updaterImport + "\n\n" + trustedImport + "\nfunction handleTrusted(channel, listener) {\n    return ipcMain.handle(channel, (event, ...args) => { assertTrustedRenderer(event); return listener(event, ...args); });\n}",
         'main trusted helper',
     );
 
@@ -220,7 +223,7 @@ function patchUpdater() {
     src = replaceOnce(
         src,
         "const { app, ipcMain, dialog } = require('electron');",
-        "const { app, ipcMain: rawIpcMain, dialog } = require('electron');\nconst { assertTrustedRenderer } = require('./services/trustedRenderer');\nconst ipcMain = { handle: (channel, listener) => rawIpcMain.handle(channel, (event, ...args) => { assertTrustedRenderer(event); return listener(event, ...args); }) };",
+        "const { app, ipcMain: rawIpcMain, dialog } = require('electron');\nconst { assertTrustedRenderer } = " + localRequire('./services/trustedRenderer') + ";\nconst ipcMain = { handle: (channel, listener) => rawIpcMain.handle(channel, (event, ...args) => { assertTrustedRenderer(event); return listener(event, ...args); }) };",
         'updater trusted IPC wrapper',
     );
     if (!src.includes('function downloadFile(url, destPath, onProgress, redirects = 0)')) {

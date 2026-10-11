@@ -44,7 +44,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json .github/workflows/main-regression.yml .github/workflows/release-windows.yml tests/reels-4.4.43-regression.test.js
+          git add package.json package-lock.json .github/workflows/main-regression.yml .github/workflows/release-windows.yml
+          git add -f tests/reels-4.4.43-regression.test.js
           git diff --cached --check
           git diff --cached --quiet && exit 0
           git commit -m "release: prepare v4.4.51"

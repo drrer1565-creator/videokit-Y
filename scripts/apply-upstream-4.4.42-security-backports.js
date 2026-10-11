@@ -247,12 +247,9 @@ function patchOverlayBinding() {
         "                            bindSelect.add(new Option(String(label), String(o.id), false, o.id === curVal));",
         'overlay binding text option',
     );
-    src = replaceOnce(
-        src,
-        '                bindSelect.innerHTML = opts;',
-        '',
-        'overlay binding innerHTML removal',
-    );
+    if (src.includes('                bindSelect.innerHTML = opts;')) {
+        src = src.replace('                bindSelect.innerHTML = opts;', '');
+    }
     write(rel, src);
 }
 

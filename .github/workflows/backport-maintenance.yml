@@ -24,17 +24,29 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Normalize dependency and action pins
-        run: node scripts/apply-upstream-4.4.42-repo-maintenance.cjs
-
-      - name: Commit normalized lockfile
+      - name: Normalize generated backport sources
         shell: bash
         run: |
-          if ! git diff --quiet -- package-lock.json; then
+          node scripts/apply-upstream-4.4.42-repo-maintenance.cjs
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-upstream-4.4.42-security-backports.js')
+          s = p.read_text()
+          old = "const localRequire = (modulePath) => `require(${JSON.stringify(modulePath)})`;"
+          new = "const localRequire = (modulePath) => \"require(\" + \"'\" + modulePath + \"'\" + \")\";"
+          if old in s:
+              s = s.replace(old, new)
+              p.write_text(s)
+          PY
+
+      - name: Commit normalized sources
+        shell: bash
+        run: |
+          if ! git diff --quiet -- package-lock.json scripts/apply-upstream-4.4.42-security-backports.js; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "security: align lockfile with 4.4.49 and upstream pins"
+            git add package-lock.json scripts/apply-upstream-4.4.42-security-backports.js
+            git commit -m "fix: normalize security backport sources"
             git push origin HEAD:feature/upstream-4.4.42-security-backports
           fi
 

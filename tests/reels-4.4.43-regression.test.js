@@ -114,7 +114,7 @@ test('preset name dialog guards typing focus from global handlers', () => {
   assert.ok(src.includes('requestAnimationFrame(focusNameInput)'));
 });
 
-test('package version is 4.4.49', () => {
+test('package version is 4.4.50', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.equal(pkg.version, '4.4.49');
+  assert.equal(pkg.version, '4.4.50');
 });

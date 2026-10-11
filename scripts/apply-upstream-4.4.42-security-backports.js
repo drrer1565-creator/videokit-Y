@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const localRequire = (modulePath) => `require(${JSON.stringify(modulePath)})`;
+const localRequire = (modulePath) => "require(" + "'" + modulePath + "'" + ")";
 
 function read(rel) {
     return fs.readFileSync(path.join(root, rel), 'utf8');

@@ -1,0 +1,8 @@
+VideoKit v4.4.53
+
+- Fix Reels overlay font pickers using stale font-group snapshots after asynchronous FontManager registration.
+- T subtitles, normal text overlays, text-card title/body/footer and scrolling-text font pickers now share the latest central FontManager catalog.
+- Add a lightweight catalog-version invalidation mechanism so existing pickers refresh only when the available font catalog actually changes.
+- Opening a font picker does not rescan Windows fonts or refetch the Google Fonts catalog on every click.
+- Google Fonts remain loaded on demand when selected, while the catalog continues to use the existing seven-day metadata cache.
+- Add regression coverage to prevent the stale overlay-font search bug from returning.

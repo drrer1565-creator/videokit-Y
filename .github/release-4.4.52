@@ -1,0 +1,7 @@
+VideoKit v4.4.52
+
+- Fix connected-fit subtitle backgrounds when neighbouring centered lines have only a small width difference.
+- Near-equal adjacent rows now snap both left and right background edges to the widest row.
+- The decision is recalculated from the live layout on every render, so font size, font family, letter spacing, wrapping, padding, line spacing/layout and inward radius changes update immediately.
+- Clearly different line widths continue to use the connected concave-corner transition.
+- Add regression coverage for two-line, multi-line, live-radius and widest-row preservation cases.

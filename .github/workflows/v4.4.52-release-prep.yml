@@ -1,0 +1,60 @@
+name: v4.4.52 release prep
+
+on:
+  push:
+    branches: ['fix/v4.4.52-connected-fit-snap']
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: fix/v4.4.52-connected-fit-snap
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Integrate v4.4.52 patch into package scripts
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const patch = 'node scripts/apply-v4.4.52-connected-fit-snap.js';
+          for (const key of ['predev', 'pretest', 'prebuild', 'prebuild:web']) {
+            if (!pkg.scripts[key].includes(patch)) pkg.scripts[key] += ` && ${patch}`;
+          }
+          const newTest = 'tests/subtitle-display-v4.4.52-regression.test.js';
+          if (!pkg.scripts.test.includes(newTest)) pkg.scripts.test += ` ${newTest}`;
+          fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+          npm version 4.4.52 --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run complete regression suite
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Commit validated release metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/v4.4.52-release-prep.yml
+          git add package.json package-lock.json
+          git commit -m "release: prepare v4.4.52 package metadata"
+          git push origin HEAD:fix/v4.4.52-connected-fit-snap

@@ -114,6 +114,23 @@ test('preset name dialog guards typing focus from global handlers', () => {
   assert.ok(src.includes('requestAnimationFrame(focusNameInput)'));
 });
 
+test('font picker refreshes stale overlay groups without rescanning on every click', () => {
+  const src = read('src/reels-font-manager.js');
+  assert.ok(src.includes('V4_4_53_FONT_PICKER_LIVE_GROUPS'));
+  assert.ok(src.includes('this._fontCatalogVersion = 0'));
+  assert.ok(src.includes('this._touchFontCatalog();'));
+  assert.ok(src.includes('select._fpLiveGroups = groups'));
+  assert.ok(src.includes('select._fpLiveDisplayNames = DISPLAY_NAMES'));
+  assert.ok(src.includes('select._fpCatalogVersion = this.getFontCatalogVersion()'));
+  assert.ok(src.includes('if (select._fpCatalogVersion !== latestVersion)'));
+  assert.ok(src.includes('this.refreshFontSelect(select, select.value)'));
+  assert.ok(src.includes('select._fpLiveGroups || groups'));
+
+  const clickHandler = src.slice(src.indexOf("btn.addEventListener('click'"), src.indexOf("const btn = wrap.querySelector('.fp-btn')"));
+  assert.equal(clickHandler.includes('register()'), false, 'opening a picker must not rescan the font system');
+  assert.equal(clickHandler.includes('_fetchGoogleFontsCatalog'), false, 'opening a picker must not refetch Google Fonts');
+});
+
 test('package version is 4.4.52', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.version, '4.4.52');

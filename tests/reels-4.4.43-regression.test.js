@@ -131,6 +131,25 @@ test('font picker refreshes stale overlay groups without rescanning on every cli
   assert.equal(clickHandler.includes('_fetchGoogleFontsCatalog'), false, 'opening a picker must not refetch Google Fonts');
 });
 
+test('scrolling overlay uppercase and letter spacing sync immediately', () => {
+  const src = read('src/reels-overlay-panel.js');
+  assert.ok(src.includes('V4_4_54_SCROLL_STYLE_LIVE_SYNC'));
+
+  const fieldsStart = src.indexOf('const fields = [');
+  const fieldsEnd = src.indexOf('for (const fid of fields)', fieldsStart);
+  assert.ok(fieldsStart >= 0 && fieldsEnd > fieldsStart, 'shared overlay field listener list must exist');
+  const fieldsBlock = src.slice(fieldsStart, fieldsEnd);
+  assert.ok(fieldsBlock.includes("'rop-scroll-uppercase'"), 'scroll body uppercase must be bound to live sync');
+  assert.ok(fieldsBlock.includes("'rop-scroll-letterspacing'"), 'scroll body letter spacing must be bound to live sync');
+
+  const listenerBlock = src.slice(fieldsEnd, src.indexOf('// ── Windows Electron 焦点修复', fieldsEnd));
+  assert.ok(listenerBlock.includes("el.addEventListener('input', () => this._syncToOverlay())"));
+  assert.ok(listenerBlock.includes("el.addEventListener('change', () => this._syncToOverlay())"));
+
+  assert.ok(src.includes("ov.scroll_uppercase = this._get('rop-scroll-uppercase')"));
+  assert.ok(src.includes("ov.scroll_letter_spacing = this._get('rop-scroll-letterspacing')"));
+});
+
 test('package version is 4.4.52', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.version, '4.4.52');

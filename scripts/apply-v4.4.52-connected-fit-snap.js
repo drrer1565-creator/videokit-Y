@@ -51,5 +51,6 @@ if (!renderer.includes('V4_4_52_CONNECTED_FIT_WIDTH_SNAP')
 
 console.log('[4.4.52-connected-fit-snap] Near-equal connected subtitle rows now snap to the widest row in real time.');
 
-// Keep the next compatibility patch in the existing predev/pretest/prebuild chain.
+// Keep later compatibility patches in the existing predev/pretest/prebuild chain.
 require('./apply-v4.4.53-font-picker-live-groups.js');
+require('./apply-v4.4.54-overlay-scroll-live-style.js');

@@ -4,7 +4,7 @@ on:
     tags: ['v*']
     branches: ['main']
     paths:
-      - '.github/release-4.4.53'
+      - '.github/release-4.4.54'
 permissions:
   contents: read
 concurrency:
@@ -34,7 +34,7 @@ jobs:
         run: npm test
 
       - name: 🔖 同步发布版本号
-        run: npm version 4.4.53 --no-git-tag-version --allow-same-version
+        run: npm version 4.4.54 --no-git-tag-version --allow-same-version
 
       - name: 🐍 下载 Python Embedded
         shell: pwsh
@@ -142,9 +142,9 @@ jobs:
       - name: 🎉 创建 Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.53' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.54' }}
           target_commitish: ${{ github.sha }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.53' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.54' }}
           files: all-builds/*
           draft: false
           prerelease: false

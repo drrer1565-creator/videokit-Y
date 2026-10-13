@@ -1,0 +1,7 @@
+VideoKit v4.4.54
+
+- Fix Batch Reels overlay live preview for scrolling-text body uppercase.
+- Fix Batch Reels overlay live preview for scrolling-text body letter spacing.
+- Both controls now use the existing input/change -> _syncToOverlay() -> render path immediately, without requiring a font-size change to refresh the preview.
+- Renderer and export behavior are unchanged; this release only repairs the missing UI event bindings.
+- Add regression coverage to prevent the live-preview synchronization bug from returning.

@@ -54,4 +54,4 @@ for (const marker of required) {
 console.log('[4.4.54-overlay-scroll-live-style] Scrolling overlay uppercase and letter spacing now preview immediately.');
 
 // Keep the next batch-import performance patch in the existing predev/pretest/prebuild chain.
-require('./apply-v4.4.55-batch-import-performance.js');
+require('./apply-v4.4.55-batch-import-performance-chain.js');

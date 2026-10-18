@@ -36,3 +36,6 @@ if (!alreadyApplied) {
   }
   console.log('[4.4.55-batch-import-performance] already applied; idempotent validation passed.');
 }
+
+// Keep the exact-row multi-material drop performance fix in the same lifecycle chain.
+require('./apply-v4.4.56-fast-row-multidrop.js');

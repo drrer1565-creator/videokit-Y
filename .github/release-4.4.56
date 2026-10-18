@@ -1,0 +1,9 @@
+VideoKit v4.4.56 release trigger
+
+Includes Batch Reels fast per-row multi-material drag/drop stability fixes:
+- exact background drops target the row under the mouse instead of selectedIdx
+- multi-file drops on one background cell configure that row's multi-material pool directly
+- rapid exact-row drops update only the target cell instead of rebuilding the entire batch table
+- persistence/history and selected preview updates are debounced during fast repeated drops
+- dragover highlighting no longer scans every droppable cell on every pointer event
+- retains v4.4.55 batch SRT/TXT/folder import performance fixes

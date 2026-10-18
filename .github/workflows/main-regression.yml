@@ -3,6 +3,8 @@ name: Main regression CI
 on:
   push:
     branches: ['main']
+  pull_request:
+    branches: ['main']
 
 permissions:
   contents: read
@@ -28,6 +30,9 @@ jobs:
 
       - name: Run regression tests
         run: npm test
+
+      - name: Run v4.4.55 batch import regression
+        run: node --test tests/batch-import-performance-v4.4.55-regression.test.js
 
       - name: Build frontend
         run: npm run build

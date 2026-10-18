@@ -1,0 +1,9 @@
+VideoKit v4.4.55 release trigger
+
+Includes batch import performance and stability improvements:
+- SRT and TXT batch imports parse files without rebuilding the full batch table for every file
+- folder/material-group companion SRT/TXT reads use asynchronous text I/O
+- mixed media imports coalesce batch table/task-list refreshes into one final UI update
+- single-file imports keep immediate feedback while batch operations avoid repeated redraws
+- reduces white-screen and unresponsive-window risk while another template is rendering
+- retains previous v4.4.54 fixes

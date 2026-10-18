@@ -34,5 +34,8 @@ jobs:
       - name: Run v4.4.55 batch import regression
         run: node --test tests/batch-import-performance-v4.4.55-regression.test.js
 
+      - name: Run v4.4.56 fast row-drop regression
+        run: node --test tests/batch-row-drop-v4.4.56-regression.test.js
+
       - name: Build frontend
         run: npm run build

@@ -17,6 +17,13 @@ function extractRange(src, startMarker, endMarker, label) {
   return src.slice(start, end);
 }
 
+function extractInclusive(src, startMarker, terminal, label) {
+  const start = src.indexOf(startMarker);
+  const tail = src.indexOf(terminal, start + startMarker.length);
+  if (start < 0 || tail < 0) throw new Error(`v4.4.60 ${label}: inclusive range missing`);
+  return src.slice(start, tail + terminal.length);
+}
+
 function replaceRange(target, source, startMarker, endMarker, label) {
   const replacement = extractRange(source, startMarker, endMarker, `${label} source`);
   const start = target.indexOf(startMarker);
@@ -112,8 +119,10 @@ function syntaxCheck(p) {
   syntaxCheck(rendererPath);
 }
 
-// 4) Batch Reels: copy the upstream speech-writing resolver, UI handlers, and exact read/write fields
-// while leaving unrelated fork task/export/performance logic untouched.
+// 4) Batch Reels: copy upstream speech-writing resolver/read/write behavior while leaving
+// unrelated fork task/export/performance logic untouched. Upstream UI handler assignments are
+// appended last in a block scope so they override the older compatibility implementation without
+// redeclaring its helper consts.
 {
   const batchPath = file('src', 'batch-reels.js');
   let current = read(batchPath);
@@ -139,7 +148,6 @@ function syntaxCheck(p) {
     'style read fullpage fields'
   );
 
-  // The write block uses a 4-space comment indent and is a separate range.
   current = replaceRange(
     current,
     upstream,
@@ -148,9 +156,12 @@ function syntaxCheck(p) {
     'style write fullpage fields'
   );
 
-  const helperStart = 'window.reelsRefreshWritingTitleEditor = function() {';
-  const helperEnd = 'function reelsRefreshSubtitleWeightOptions() {';
-  current = replaceRange(current, upstream, helperStart, helperEnd, 'speech-writing UI handlers');
+  if (!current.includes('V4_4_60_UPSTREAM_SPEECH_HANDLERS')) {
+    const helperStart = 'window.reelsRefreshWritingTitleEditor = function() {';
+    const helperTerminal = "window.reelsRefreshSpeechWritingPreview=function(...args){\n    reelsRefreshSpeechWritingImageUI();\n    return _refreshWritingBeforeCustomImage?.apply(this,args);\n};";
+    const handlers = extractInclusive(upstream, helperStart, helperTerminal, 'speech-writing UI handlers');
+    current += `\n\n{\n// V4_4_60_UPSTREAM_SPEECH_HANDLERS\n${handlers}\n}\n`;
+  }
 
   write(batchPath, current);
   syntaxCheck(batchPath);

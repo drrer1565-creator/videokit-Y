@@ -17,9 +17,6 @@ const alreadyApplied = batch.includes('V4_4_55_BATCH_IMPORT_REFRESH_GUARD')
 if (!alreadyApplied) {
   require('./apply-v4.4.55-batch-import-performance.js');
 } else {
-  // The underlying transformation script intentionally targets the pre-4.4.55
-  // source shape.  Do not run it twice in the same npm workspace (npm test then
-  // npm build); validate the already-patched files instead.
   new vm.Script(batch, { filename: batchPath });
   new vm.Script(preload, { filename: preloadPath });
   const required = [
@@ -31,11 +28,11 @@ if (!alreadyApplied) {
   for (const marker of required) {
     if (!batch.includes(marker)) throw new Error(`4.4.55 chained patch validation failed: ${marker}`);
   }
-  if (!preload.includes('readFileTextAsync')) {
-    throw new Error('4.4.55 chained patch validation failed: readFileTextAsync');
-  }
+  if (!preload.includes('readFileTextAsync')) throw new Error('4.4.55 chained patch validation failed: readFileTextAsync');
   console.log('[4.4.55-batch-import-performance] already applied; idempotent validation passed.');
 }
 
-// Keep the exact-row multi-material drop performance fix in the same lifecycle chain.
 require('./apply-v4.4.56-fast-row-multidrop.js');
+require('./apply-v4.4.57-writing-compat.js');
+require('./apply-v4.4.57-drop-compat.js');
+require('./apply-v4.4.57-selected-upgrades.js');

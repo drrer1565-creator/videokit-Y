@@ -26,8 +26,13 @@ test('batch import uses numeric natural order', () => {
 
 test('single media file can be dropped directly into a background cell', () => {
   const src = read('src/reels-batch-table.js');
-  assert.ok(src.includes('V4_4_43_DIRECT_BG_DROP'));
-  assert.ok(src.includes("await _assignSingleFile(idx, 'bg', file);"));
+  assert.ok(src.includes('V4_4_43_DIRECT_BG_DROP') || src.includes('V4_4_56_FAST_ROW_BG_DROP'));
+  // v4.4.56 replaced the old generic _assignSingleFile route with a lighter
+  // exact-row update so rapid drops do not rebuild the whole table.
+  assert.ok(
+    src.includes("await _assignSingleFile(idx, 'bg', file);") ||
+    (src.includes("if (dropCell && dropCell.dataset.field === 'bg')") && src.includes('_setTaskSingleBackground(task, filePaths[0]'))
+  );
 });
 
 test('multi-background drop preserves the exact target row', () => {

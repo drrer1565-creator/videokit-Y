@@ -74,19 +74,34 @@ test('v4.4.60 full-screen typewriter controls exactly match upstream', () => {
   ]) assert.match(current, new RegExp(`id="${id}"`));
 });
 
-test('v4.4.60 uses the upstream-native renderer instead of the old monkey-patch implementation', () => {
+test('v4.4.60 adapts upstream speech-writing behavior without replacing fork renderer features', () => {
   const renderer = cur('src', 'reels-canvas-renderer.js');
-  const upstream = up('src', 'reels-canvas-renderer.js');
-  const stripped = renderer
-    .replace(/^\/\/ V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING\n\/\/ V4_4_57_WRITING_CURSOR_POSITION V4_4_48_GRADIENT_SCOPE_RENDER V4_4_49_CHARACTER_FX_RENDER\n/, '')
-    .replace(/\nif \(typeof window !== "undefined"\) window\.__V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING = true;\n?$/, '\n');
-  assert.equal(stripped, upstream);
-  for (const marker of ['getWritingGraphemes','repairCollapsedWritingSegments','getSpeechWritingTokens','drawSpeechWritingTip','getSplitWritingParts','getWritingVisualStyle','prepareWritingCursorImage']) {
-    assert.match(renderer, new RegExp(marker));
-  }
   const extension = cur('src', 'reels-speech-writing.js');
-  assert.match(extension, /V4_4_60_NATIVE_RENDERER_GUARD/);
-  assert.match(extension, /if \(window\.__V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING\) return;/);
+
+  for (const marker of [
+    'V4_4_57_WRITING_CURSOR_POSITION',
+    'V4_4_48_GRADIENT_SCOPE_RENDER',
+    'V4_4_49_CHARACTER_FX_RENDER',
+    'V4_4_51_CONNECTED_SUBTITLE_BOX_GEOMETRY',
+    'V4_4_52_CONNECTED_FIT_WIDTH_SNAP',
+    'charEngine.computeCharacterPresetTransform(',
+    'buildConnectedSubtitleBoxGeometry(',
+    'snapGroupToWidest',
+    's.highlight_enabled === false',
+  ]) assert.match(renderer, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  for (const marker of [
+    'function getSpeechWritingTokens(',
+    'function getSplitWritingParts(',
+    'function getWritingVisualStyle(',
+    'proto.prepareWritingCursorImage = async function',
+    'proto._drawSpeechWritingTip = function',
+    'proto._renderFullpageTypewriter = function',
+    'ImageDecoder',
+  ]) assert.ok(extension.includes(marker), `speech-writing adapter missing: ${marker}`);
+
+  assert.doesNotMatch(extension, /V4_4_60_NATIVE_RENDERER_GUARD/);
+  assert.doesNotMatch(extension, /window\.__V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING/);
 });
 
 test('v4.4.60 copies upstream Batch Reels speech resolver, handlers, and style read/write fields', () => {
@@ -113,7 +128,7 @@ test('v4.4.60 copies upstream Batch Reels speech resolver, handlers, and style r
   );
 });
 
-test('v4.4.60 style defaults match upstream and export integration uses the native writing logic', () => {
+test('v4.4.60 style defaults match upstream and export integration uses the adapted writing logic', () => {
   const currentStyle = cur('src', 'reels-style-engine.js');
   const upstreamStyle = up('src', 'reels-style-engine.js');
   assert.equal(

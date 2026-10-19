@@ -8,23 +8,27 @@ let src = fs.readFileSync(mainPath, 'utf8').replace(/\r\n?/g, '\n');
 const before = src;
 
 if (!src.includes('V4_4_58_OPEN_PATH_IPC')) {
-  const marker = "    ipcMain.handle('select-directory', async () => {";
-  if (!src.includes(marker)) throw new Error('v4.4.58 open-path IPC insertion marker missing');
+  const needle = "ipcMain.handle('select-directory'";
+  const at = src.indexOf(needle);
+  if (at < 0) throw new Error('v4.4.58 open-path IPC insertion marker missing');
+  const lineStart = src.lastIndexOf('\n', at) + 1;
+  const indentMatch = src.slice(lineStart, at).match(/^\s*/);
+  const indent = indentMatch ? indentMatch[0] : '    ';
   const handler = [
-    '    // V4_4_58_OPEN_PATH_IPC',
-    "    ipcMain.handle('open-path', async (_event, targetPath) => {",
-    "        const value = String(targetPath || '').trim();",
-    "        if (!value) return '路径为空';",
-    '        try {',
-    '            const result = await shell.openPath(path.resolve(value));',
-    "            return result || '';",
-    '        } catch (error) {',
-    "            return error?.message || '无法打开路径';",
-    '        }',
-    '    });',
+    `${indent}// V4_4_58_OPEN_PATH_IPC`,
+    `${indent}ipcMain.handle('open-path', async (_event, targetPath) => {`,
+    `${indent}    const value = String(targetPath || '').trim();`,
+    `${indent}    if (!value) return '路径为空';`,
+    `${indent}    try {`,
+    `${indent}        const result = await shell.openPath(path.resolve(value));`,
+    `${indent}        return result || '';`,
+    `${indent}    } catch (error) {`,
+    `${indent}        return error?.message || '无法打开路径';`,
+    `${indent}    }`,
+    `${indent}});`,
     '',
   ].join('\n');
-  src = src.replace(marker, handler + marker);
+  src = src.slice(0, lineStart) + handler + src.slice(lineStart);
 }
 
 new vm.Script(src, { filename: mainPath });

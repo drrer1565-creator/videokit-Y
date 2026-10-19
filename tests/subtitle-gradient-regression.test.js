@@ -7,60 +7,49 @@ function read(rel) {
   return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 }
 
-test('normal T-subtitles keep whole-sentence gradient as the default', () => {
-  const src = read('src/reels-canvas-renderer.js');
+test('normal T-subtitles keep whole-line gradient as the upstream default', () => {
+  const renderer = read('src/reels-canvas-renderer.js');
+  const style = read('src/reels-style-engine.js');
 
-  assert.match(src, /_createTextGradient\(ctx, fillColor, direction = 'horizontal', bounds = null\)/);
-  assert.match(src, /const sharedGradientBounds = \{/);
-  assert.match(src, /const gradientScope = s\.text_gradient_scope === 'word' \? 'word' : 'sentence'/);
-  assert.match(src, /const sharedTextGradient = gradientScope === 'sentence' \? this\._createTextGradient/);
-  assert.match(src, /const sharedHighGradient = gradientScope === 'sentence' \? this\._createTextGradient/);
-  // Character-animation support may append renderer-only parameters after the
-  // shared gradient argument. Keep this regression focused on the gradient
-  // default rather than the exact end of the _drawWord() signature.
-  assert.match(src, /sharedGradient = null(?:,\s*charAnim = null)?\)/);
-  assert.match(src, /if \(sharedGradient\) \{\s*ctx\.fillStyle = sharedGradient;/);
+  assert.match(style, /text_gradient_scope: 'line', \/\/ 'line' \(整句渐变\) \| 'word' \(每个单词独立渐变\)/);
+  assert.match(renderer, /const activeGradBounds = \(s\.text_gradient_scope === 'word'\) \? wordGradBounds : lineGradBounds;/);
+  assert.match(renderer, /const lineGradBounds = \{/);
+  assert.match(renderer, /const wordGradBounds = \{/);
 });
 
-test('per-word gradient mode reuses the preserved per-word fallback', () => {
+test('gradient range uses the original-author line/word dropdown and persists the selected scope', () => {
   const renderer = read('src/reels-canvas-renderer.js');
   const batch = read('src/batch-reels.js');
   const html = read('src/index.html');
 
-  // No shared gradient is created in word mode, so _drawWord builds a fresh gradient
-  // from each word's own x/width just like the pre-4.4.42 behavior.
-  assert.match(renderer, /gradientScope === 'sentence' \? this\._createTextGradient[\s\S]*?: null;/);
-  assert.match(renderer, /else if \(typeof fillColor === 'string' && fillColor\.includes\(','\)\)/);
-  assert.match(renderer, /ctx\.createLinearGradient\(x, y, x \+ \(wordW \|\| fontSize \* 2\), y\)/);
+  assert.match(html, /id="reels-text-gradient-scope"/);
+  assert.match(html, /<option value="line" selected>整句渐变<\/option>/);
+  assert.match(html, /<option value="word">每个单词独立渐变<\/option>/);
+  assert.doesNotMatch(html, /id="reels-gradient-scope"/);
+  assert.doesNotMatch(html, /reels-gradient-scope-sentence/);
+  assert.doesNotMatch(html, /reels-gradient-scope-word/);
 
-  assert.match(batch, /text_gradient_scope: val\('reels-gradient-scope'\) \|\| 'sentence'/);
-  assert.match(batch, /reelsSetGradientScope\(style\.text_gradient_scope \|\| 'sentence', false\)/);
-  assert.match(html, /id="reels-gradient-scope" value="sentence"/);
-  assert.match(html, /id="reels-gradient-scope-sentence"/);
-  assert.match(html, /id="reels-gradient-scope-word"/);
+  assert.match(batch, /text_gradient_scope: val\('reels-text-gradient-scope'\) \|\| 'line'/);
+  assert.match(batch, /set\('reels-text-gradient-scope', style\.text_gradient_scope === 'word' \? 'word' : 'line'\)/);
+  assert.doesNotMatch(batch, /val\('reels-gradient-scope'\)/);
+  assert.doesNotMatch(batch, /reelsSetGradientScope\(/);
+
+  // Upstream uses the same gradient data for both modes; only the gradient
+  // bounds change. line = one continuous gradient across the line, word =
+  // restart the complete gradient independently inside each word.
+  assert.match(renderer, /const activeGradBounds = \(s\.text_gradient_scope === 'word'\) \? wordGradBounds : lineGradBounds;/);
 });
 
-test('T-subtitle uppercase mode is preset-safe and non-destructive', () => {
+test('T-subtitle uppercase mode remains preset-safe and non-destructive under the upstream renderer', () => {
   const renderer = read('src/reels-canvas-renderer.js');
   const batch = read('src/batch-reels.js');
   const html = read('src/index.html');
 
   assert.match(html, /id="reels-uppercase"/);
   assert.match(batch, /uppercase: chk\('reels-uppercase'\)/);
-  assert.match(batch, /setChk\('reels-uppercase', !!style\.uppercase\)/);
+  assert.match(batch, /setChk\('reels-uppercase', (?:!!)?style\.uppercase\)/);
 
-  // The original subtitle string remains untouched; layout and drawing use a
-  // derived display string so switching the option off restores the source text.
-  assert.match(renderer, /const segmentText = segment\.edited_text \|\| segment\.text \|\| '';/);
-  assert.match(renderer, /const displaySegmentText = s\.uppercase \? segmentText\.toUpperCase\(\) : segmentText;/);
-  assert.match(renderer, /const text = displaySegmentText;/);
-
-  // Timed words are transformed on copies, preserving word timing metadata.
-  assert.match(renderer, /return s\.uppercase \? word\.toUpperCase\(\) : word;/);
-  assert.match(renderer, /word: s\.uppercase \? String\(w\.word \|\| ''\)\.toUpperCase\(\) : w\.word/);
-  assert.match(renderer, /sourceWords\.map\(w => \(\{ \.\.\.w, word: String\(w\.word \|\| ''\)\.toUpperCase\(\) \}\)\)/);
-
-  // ASS fallback honors the same style without altering saved source text.
-  assert.match(renderer, /const shouldUppercase = segmentStyle\.uppercase !== undefined \? !!segmentStyle\.uppercase : !!s\.uppercase;/);
-  assert.match(renderer, /const displayText = shouldUppercase \? sourceText\.toUpperCase\(\) : sourceText;/);
+  assert.match(renderer, /_applyTextTransform\(str, s\) \{/);
+  assert.match(renderer, /if \(s\.uppercase === true \|\| String\(s\.text_transform \|\| ''\)\.toLowerCase\(\) === 'uppercase'\) \{/);
+  assert.match(renderer, /return raw\.toUpperCase\(\);/);
 });

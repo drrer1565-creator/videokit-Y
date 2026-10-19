@@ -51,15 +51,20 @@ test('v4.4.58 Microsoft TTS output path and open actions are usable', () => {
   const html = read(indexPath);
   const preload = read(preloadPath);
   const tts = read(ttsPath);
+  const main = read(mainPath);
   assert.match(html, /V4_4_58_EDITABLE_TTS_OUTPUT/);
   assert.doesNotMatch(html, /id="ms-output"[^>]*\sreadonly(?:\s|>)/);
   assert.match(preload, /V4_4_58_ELECTRON_OPEN_PATH/);
   assert.match(preload, /openPath:\s*safeOpenPath/);
+  assert.match(main, /V4_4_58_OPEN_PATH_IPC/);
+  assert.match(main, /ipcMain\.handle\('open-path'/);
+  assert.match(main, /shell\.openPath\(path\.resolve\(value\)\)/);
   assert.match(tts, /V4_4_58_TTS_OPEN_PATH_FIX/);
   assert.match(tts, /await openSystemPath\(target\)/);
   assert.match(tts, /window\.electronAPI\?\.fsExists\?\.\(candidate\)/);
   new vm.Script(preload, { filename: preloadPath });
   new vm.Script(tts, { filename: ttsPath });
+  new vm.Script(main, { filename: mainPath });
 });
 
 test('v4.4.58 Microsoft TTS never substitutes a generic locale-only voice silently', () => {

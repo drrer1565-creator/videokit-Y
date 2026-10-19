@@ -39,3 +39,6 @@ if (!alreadyApplied) {
 
 // Keep the exact-row multi-material drop performance fix in the same lifecycle chain.
 require('./apply-v4.4.56-fast-row-multidrop.js');
+// Selected upstream v4.4.57 integrations are deliberately chained last so they
+// can wire the final patched 4.4.56 Batch Reels source without undoing its performance fixes.
+require('./apply-v4.4.57-selected-upgrades.js');

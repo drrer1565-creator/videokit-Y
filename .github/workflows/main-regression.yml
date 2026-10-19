@@ -40,5 +40,8 @@ jobs:
       - name: Run v4.4.57 selected-upgrade regression
         run: node --test tests/upstream-selected-v4.4.57-regression.test.js
 
+      - name: Run v4.4.58 startup regression
+        run: node --test tests/startup-white-screen-v4.4.58-regression.test.js
+
       - name: Build frontend
         run: npm run build

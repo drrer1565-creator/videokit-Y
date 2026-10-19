@@ -39,3 +39,6 @@ require('./apply-v4.4.57-selected-upgrades.js');
 require('./apply-v4.4.58-startup-white-screen.js');
 require('./apply-v4.4.58-open-path-ipc.js');
 require('./apply-v4.4.58-microsoft-tts-reliability.js');
+require('./apply-v4.4.59-microsoft-tts-frontend.js');
+require('./apply-v4.4.59-microsoft-tts-polish.js');
+require('./apply-v4.4.59-microsoft-tts-backend.js');

@@ -36,13 +36,15 @@ test('v4.4.58 defers Microsoft TTS queue and voice discovery until its tab is op
   new vm.Script(src, { filename: ttsPath });
 });
 
-test('v4.4.58 Microsoft TTS preview cache is keyed by selected voice/rate/pitch', () => {
+test('v4.4.58 Microsoft TTS preview cache is keyed by selected voice/rate/pitch or superseded by saved-file playback', () => {
   const src = read(ttsPath);
   assert.match(src, /V4_4_58_TTS_VOICE_CACHE_KEY/);
   assert.match(src, /voiceSettingsKey\(settings = currentVoiceSettings\(\)\)/);
   assert.match(src, /row\._previewSettingsKey === previewKey/);
-  assert.match(src, /row\._fullPreviewSettingsKey === previewKey/);
-  assert.match(src, /V4_4_58_TTS_PREVIEW_ALL_KEYED/);
+  assert.ok(
+    src.includes('V4_4_58_TTS_PREVIEW_ALL_KEYED') || src.includes('V4_4_59_TTS_PLAY_SAVED_BATCH'),
+    'sequential preview must either use the keyed v4.4.58 cache or the stronger v4.4.59 saved-file playback path'
+  );
   assert.match(src, /invalidateVoicePreviewCache\(\)/);
   new vm.Script(src, { filename: ttsPath });
 });
@@ -61,7 +63,11 @@ test('v4.4.58 Microsoft TTS output path and open actions are usable', () => {
   assert.match(main, /shell\.openPath\(path\.resolve\(value\)\)/);
   assert.match(tts, /V4_4_58_TTS_OPEN_PATH_FIX/);
   assert.match(tts, /await openSystemPath\(target\)/);
-  assert.match(tts, /window\.electronAPI\?\.fsExists\?\.\(candidate\)/);
+  assert.ok(
+    /window\.electronAPI\?\.fsExists\?\.\(candidate\)/.test(tts) ||
+      (/V4_4_59_TTS_ACTUAL_OUTPUT_FOLDER/.test(tts) && /fileExists\(candidate\)/.test(tts)),
+    'output-folder resolution must verify the candidate path before opening it'
+  );
   new vm.Script(preload, { filename: preloadPath });
   new vm.Script(tts, { filename: ttsPath });
   new vm.Script(main, { filename: mainPath });

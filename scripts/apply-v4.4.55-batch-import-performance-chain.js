@@ -36,3 +36,6 @@ require('./apply-v4.4.56-fast-row-multidrop.js');
 require('./apply-v4.4.57-writing-compat.js');
 require('./apply-v4.4.57-drop-compat.js');
 require('./apply-v4.4.57-selected-upgrades.js');
+require('./apply-v4.4.58-startup-white-screen.js');
+require('./apply-v4.4.58-open-path-ipc.js');
+require('./apply-v4.4.58-microsoft-tts-reliability.js');

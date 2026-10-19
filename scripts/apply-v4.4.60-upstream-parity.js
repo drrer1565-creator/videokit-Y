@@ -108,14 +108,27 @@ function syntaxCheck(p) {
   write(indexPath, current);
 }
 
-// 3) Use the upstream renderer implementation directly. Compatibility comments are inert and
-// only keep older regression probes meaningful; runtime behavior is upstream-native.
+// 3) Renderer parity is behavioral, not whole-file parity. The fork renderer already contains
+// later character animation, highlight, gradient-scope and connected-fit work. Replacing the whole
+// file with the upstream snapshot would silently delete those features. Keep the fork renderer and
+// require the compatibility layers that the upstream writing behavior is integrated on top of.
 {
   const rendererPath = file('src', 'reels-canvas-renderer.js');
-  let renderer = read(up('src', 'reels-canvas-renderer.js'));
-  renderer = `// V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING\n// V4_4_57_WRITING_CURSOR_POSITION V4_4_48_GRADIENT_SCOPE_RENDER V4_4_49_CHARACTER_FX_RENDER\n${renderer}`;
-  renderer += '\nif (typeof window !== "undefined") window.__V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING = true;\n';
-  write(rendererPath, renderer);
+  const renderer = read(rendererPath);
+  const requiredForkMarkers = [
+    'V4_4_57_WRITING_CURSOR_POSITION',
+    'V4_4_48_GRADIENT_SCOPE_RENDER',
+    'V4_4_49_CHARACTER_FX_RENDER',
+    'V4_4_51_CONNECTED_SUBTITLE_BOX_GEOMETRY',
+    'V4_4_52_CONNECTED_FIT_WIDTH_SNAP',
+    'charEngine.computeCharacterPresetTransform(',
+    'buildConnectedSubtitleBoxGeometry(',
+    'snapGroupToWidest',
+    's.highlight_enabled === false',
+  ];
+  for (const marker of requiredForkMarkers) {
+    if (!renderer.includes(marker)) throw new Error(`v4.4.60 renderer compatibility missing: ${marker}`);
+  }
   syntaxCheck(rendererPath);
 }
 
@@ -183,20 +196,31 @@ function syntaxCheck(p) {
   syntaxCheck(stylePath);
 }
 
-// 6) The old extension remains loadable for compatibility, but must not monkey-patch the
-// upstream-native renderer. This guard runs before any extension installation code.
+// 6) Keep the fork's speech-writing adapter active. It layers the upstream-facing title/body,
+// speech timing and writing-tip behavior onto the fork renderer without replacing that renderer.
+// Also remove the guard from the earlier whole-file-parity attempt if this script is run in a
+// workspace that had already been patched by that version.
 {
   const speechPath = file('src', 'reels-speech-writing.js');
-  if (fs.existsSync(speechPath)) {
-    let src = read(speechPath);
-    if (!src.includes('V4_4_60_NATIVE_RENDERER_GUARD')) {
-      const marker = "    'use strict';\n";
-      if (!src.includes(marker)) throw new Error('v4.4.60 speech extension guard marker missing');
-      src = src.replace(marker, marker + "    // V4_4_60_NATIVE_RENDERER_GUARD\n    if (window.__V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING) return;\n");
-      write(speechPath, src);
-    }
-    syntaxCheck(speechPath);
+  if (!fs.existsSync(speechPath)) throw new Error('v4.4.60 speech-writing adapter missing');
+  let src = read(speechPath);
+  src = src.replace(
+    "    // V4_4_60_NATIVE_RENDERER_GUARD\n    if (window.__V4_4_60_UPSTREAM_NATIVE_SPEECH_WRITING) return;\n",
+    ''
+  );
+  for (const marker of [
+    'function getSpeechWritingTokens(',
+    'function getSplitWritingParts(',
+    'function getWritingVisualStyle(',
+    'proto.prepareWritingCursorImage = async function',
+    'proto._drawSpeechWritingTip = function',
+    'proto._renderFullpageTypewriter = function',
+    'ImageDecoder',
+  ]) {
+    if (!src.includes(marker)) throw new Error(`v4.4.60 speech-writing adapter missing: ${marker}`);
   }
+  write(speechPath, src);
+  syntaxCheck(speechPath);
 }
 
 // 7) Export integration: preserve fork export engines, but enforce upstream speech-writing style
@@ -241,4 +265,4 @@ for (const rel of [['src','reels-wysiwyg-export.js'], ['src','reels-layered-expo
   }
 }
 
-console.log('[v4.4.60] Microsoft TTS and T fullpage writing aligned to upstream v4.4.43-fix.');
+console.log('[v4.4.60] Upstream UI/behavior parity applied with fork-compatible renderer integration.');

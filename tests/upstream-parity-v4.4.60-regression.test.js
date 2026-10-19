@@ -17,6 +17,13 @@ function range(src, startMarker, endMarker, label) {
   return src.slice(start, end);
 }
 
+function inclusive(src, startMarker, terminal, label) {
+  const start = src.indexOf(startMarker);
+  const tail = src.indexOf(terminal, start + startMarker.length);
+  assert.ok(start >= 0 && tail >= start, `${label}: inclusive range not found`);
+  return src.slice(start, tail + terminal.length);
+}
+
 function allRanges(src, startMarker, endMarker) {
   const out = [];
   let pos = 0;
@@ -87,12 +94,13 @@ test('v4.4.60 copies upstream Batch Reels speech resolver, handlers, and style r
   const upstream = up('src', 'batch-reels.js');
   const resolverStart = 'function _resolveSubtitleStyleForTask(task) {';
   const resolverEnd = 'function _resolveSubtitleStyleForTaskBase(task) {';
-  const currentResolver = range(current, resolverStart, resolverEnd, 'current resolver').replace('// V4_4_57_SPEECH_WRITING_RESOLVER\n', '');
-  assert.equal(currentResolver, range(upstream, resolverStart, resolverEnd, 'upstream resolver'));
+  assert.equal(range(current, resolverStart, resolverEnd, 'current resolver'), range(upstream, resolverStart, resolverEnd, 'upstream resolver'));
 
   const helperStart = 'window.reelsRefreshWritingTitleEditor = function() {';
-  const helperEnd = 'function reelsRefreshSubtitleWeightOptions() {';
-  assert.equal(range(current, helperStart, helperEnd, 'current handlers'), range(upstream, helperStart, helperEnd, 'upstream handlers'));
+  const helperTerminal = "window.reelsRefreshSpeechWritingPreview=function(...args){\n    reelsRefreshSpeechWritingImageUI();\n    return _refreshWritingBeforeCustomImage?.apply(this,args);\n};";
+  const upstreamHandlers = inclusive(upstream, helperStart, helperTerminal, 'upstream handlers');
+  assert.match(current, /V4_4_60_UPSTREAM_SPEECH_HANDLERS/);
+  assert.ok(current.includes(upstreamHandlers), 'exact upstream speech handler block should be installed');
 
   const currentRead = allRanges(current, '        // Fullpage Typewriter\n', '        // Scatter Pop\n');
   const upstreamRead = allRanges(upstream, '        // Fullpage Typewriter\n', '        // Scatter Pop\n');

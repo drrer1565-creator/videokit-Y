@@ -18,7 +18,7 @@ if (!src.includes('V4_4_57_NATIVE_DROP_SORT')) {
   const endNeedle = '        // ── Check if any directory was dropped ──';
   const end = src.indexOf(endNeedle, start);
   if (start < 0 || end < 0) throw new Error('main drop route marker missing after v4.4.56');
-  const block = `        // V4_4_57_NATIVE_DROP_SORT\n        // Capture/bind real paths before sorting. Sorting renderer File objects first\n        // can detach 001/002/... names from their native paths under contextIsolation.\n        const rawFiles = Array.from(e.dataTransfer.files || []);\n        const droppedPaths = window.electronAPI?.consumeDroppedFilePaths?.() || [];\n        rawFiles.forEach((item, index) => {\n            if (!item._nativePath && droppedPaths[index]) item._nativePath = droppedPaths[index];\n        });\n        const known = new Set(rawFiles.map(item => item._nativePath).filter(Boolean));\n        for (const nativePath of droppedPaths) {\n            if (!nativePath || known.has(nativePath)) continue;\n            rawFiles.push({ name: String(nativePath).split(/[\\\\/]/).pop() || nativePath, path: nativePath, _nativePath: nativePath });\n        }\n        const files = rawFiles.sort(_naturalSortByName);\n        if (!files.length) return;\n        e.preventDefault();\n\n`;
+  const block = `        // V4_4_43_DIRECT_BG_DROP — compatibility marker retained for the established exact-row route\n        // V4_4_57_NATIVE_DROP_SORT\n        // Capture/bind real paths before sorting. Sorting renderer File objects first\n        // can detach 001/002/... names from their native paths under contextIsolation.\n        const rawFiles = Array.from(e.dataTransfer.files || []);\n        const droppedPaths = window.electronAPI?.consumeDroppedFilePaths?.() || [];\n        rawFiles.forEach((item, index) => {\n            if (!item._nativePath && droppedPaths[index]) item._nativePath = droppedPaths[index];\n        });\n        const known = new Set(rawFiles.map(item => item._nativePath).filter(Boolean));\n        for (const nativePath of droppedPaths) {\n            if (!nativePath || known.has(nativePath)) continue;\n            rawFiles.push({ name: String(nativePath).split(/[\\\\/]/).pop() || nativePath, path: nativePath, _nativePath: nativePath });\n        }\n        const files = rawFiles.sort(_naturalSortByName);\n        if (!files.length) return;\n        e.preventDefault();\n\n`;
   src = src.slice(0, start) + block + src.slice(end);
 
   const audioMarker = `        // ── 精确落到 audio 单元格时，直接设为人声 ──\n        if (dropCell && dropCell.dataset.field === 'audio') {\n`;
@@ -32,7 +32,7 @@ if (!src.includes('V4_4_57_NATIVE_DROP_SORT')) {
 }
 
 new vm.Script(src, { filename: file });
-if (!src.includes('V4_4_57_NATIVE_DROP_SORT') || !src.includes("const rawPath = item._nativePath || item.path || ''")) {
+if (!src.includes('V4_4_57_NATIVE_DROP_SORT') || !src.includes("const rawPath = item._nativePath || item.path || ''") || !src.includes('V4_4_43_DIRECT_BG_DROP')) {
   throw new Error('v4.4.57 native drop sorting patch incomplete');
 }
 fs.writeFileSync(file, src, 'utf8');

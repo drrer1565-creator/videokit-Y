@@ -1,0 +1,11 @@
+VideoKit v4.4.57
+
+Selected upstream upgrades only:
+- Global Ctrl/Cmd+Z and Ctrl/Cmd+Y edit history with busy-task and external-action safeguards.
+- Redesigned Microsoft TTS voice studio with native Edge speech, per-card previews, batch MP3/MP4/SRT output and ZIP packaging.
+- Speech-synchronised title/body writing mode with SRT/word timing, built-in writing tips, and custom PNG/JPG/WebP/GIF follower images.
+- Bind native dropped file paths before natural sorting to keep numeric order matched to real files.
+- Restore ReelsOverlayPanel HTML escaping used by preset/scrolling overlay UI.
+
+Existing v4.4.55/v4.4.56 batch import and exact-row drag/drop performance fixes remain intact.
+Shared Profile unification and HDR preview proxy changes are intentionally not included in this release.

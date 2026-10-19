@@ -43,8 +43,8 @@ jobs:
       - name: Run v4.4.58 startup regression
         run: node --test tests/startup-white-screen-v4.4.58-regression.test.js
 
-      - name: Run v4.4.59 Microsoft TTS regression
-        run: node --test tests/microsoft-tts-v4.4.59-regression.test.js
+      - name: Run v4.4.60 upstream feature parity regression
+        run: node --test tests/upstream-parity-v4.4.60-regression.test.js
 
       - name: Build frontend
         run: npm run build

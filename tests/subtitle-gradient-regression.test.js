@@ -12,9 +12,10 @@ test('normal T-subtitles keep whole-line gradient as the upstream default', () =
   const style = read('src/reels-style-engine.js');
 
   assert.match(style, /text_gradient_scope: 'line', \/\/ 'line' \(整句渐变\) \| 'word' \(每个单词独立渐变\)/);
-  assert.match(renderer, /const activeGradBounds = \(s\.text_gradient_scope === 'word'\) \? wordGradBounds : lineGradBounds;/);
-  assert.match(renderer, /const lineGradBounds = \{/);
-  assert.match(renderer, /const wordGradBounds = \{/);
+  assert.match(renderer, /V4_4_48_GRADIENT_SCOPE_RENDER/);
+  assert.match(renderer, /const gradientScope = s\.text_gradient_scope === 'word' \? 'word' : 'line';/);
+  assert.match(renderer, /const sharedTextGradient = gradientScope === 'line' \? this\._createTextGradient\(/);
+  assert.match(renderer, /const sharedHighGradient = gradientScope === 'line' \? this\._createTextGradient\(/);
 });
 
 test('gradient range uses the original-author line/word dropdown and persists the selected scope', () => {
@@ -34,13 +35,14 @@ test('gradient range uses the original-author line/word dropdown and persists th
   assert.doesNotMatch(batch, /val\('reels-gradient-scope'\)/);
   assert.doesNotMatch(batch, /reelsSetGradientScope\(/);
 
-  // Upstream uses the same gradient data for both modes; only the gradient
-  // bounds change. line = one continuous gradient across the line, word =
-  // restart the complete gradient independently inside each word.
-  assert.match(renderer, /const activeGradBounds = \(s\.text_gradient_scope === 'word'\) \? wordGradBounds : lineGradBounds;/);
+  // The fork renderer keeps its established rendering pipeline: line mode
+  // supplies one shared gradient, while word mode passes null so _drawWord()
+  // rebuilds the complete gradient independently inside each word.
+  assert.match(renderer, /const gradientScope = s\.text_gradient_scope === 'word' \? 'word' : 'line';/);
+  assert.match(renderer, /const sharedTextGradient = gradientScope === 'line' \? this\._createTextGradient\([\s\S]*?\) : null;/);
 });
 
-test('T-subtitle uppercase mode remains preset-safe and non-destructive under the upstream renderer', () => {
+test('T-subtitle uppercase mode remains preset-safe and non-destructive under the fork renderer', () => {
   const renderer = read('src/reels-canvas-renderer.js');
   const batch = read('src/batch-reels.js');
   const html = read('src/index.html');

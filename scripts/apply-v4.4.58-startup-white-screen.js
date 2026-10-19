@@ -31,18 +31,21 @@ const syntax = (source, file) => new vm.Script(source, { filename: file });
   const before = read(file);
   let src = before;
 
-  if (!src.includes('V4_4_58_STARTUP_REVEAL')) {
+  if (!src.includes('V4_4_58_STARTUP_WINDOW_OPTIONS')) {
     src = replaceOnce(
       src,
       `        minHeight: 700,\n        title: 'VideoKit',\n        webPreferences: {`,
-      `        minHeight: 700,\n        title: 'VideoKit',\n        // V4_4_58_STARTUP_REVEAL\n        // Keep the native window hidden until Chromium has a painted frame. This\n        // removes the several-second white flash that became visible after the\n        // v4.4.57 startup workload grew. The dark background is also a safe\n        // fallback if the renderer takes unusually long to become ready.\n        show: false,\n        backgroundColor: '#0b1020',\n        webPreferences: {`,
+      `        minHeight: 700,\n        title: 'VideoKit',\n        // V4_4_58_STARTUP_WINDOW_OPTIONS\n        // Hide Chromium's blank first frame; reveal only after the renderer has\n        // painted. The dark background is a safe fallback for abnormal starts.\n        show: false,\n        backgroundColor: '#0b1020',\n        webPreferences: {`,
       'main BrowserWindow startup visibility'
     );
+  }
 
+  if (!src.includes('V4_4_58_STARTUP_REVEAL')) {
+    const marker = `    mainWindow = new BrowserWindow(windowOptions);`;
     src = replaceOnce(
       src,
-      `    mainWindow = new BrowserWindow(windowOptions);\n    // renderer 异常退出时，beforeunload 不一定会运行；由主进程记录原因。`,
-      `    mainWindow = new BrowserWindow(windowOptions);\n\n    // V4_4_58_STARTUP_REVEAL\n    let startupRevealTimer = null;\n    const revealMainWindow = () => {\n        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isVisible()) return;\n        if (startupRevealTimer) {\n            clearTimeout(startupRevealTimer);\n            startupRevealTimer = null;\n        }\n        mainWindow.show();\n    };\n    mainWindow.once('ready-to-show', revealMainWindow);\n    // A renderer failure should not leave an invisible process forever. In that\n    // exceptional case reveal the dark-backed window so diagnostics remain usable.\n    startupRevealTimer = setTimeout(revealMainWindow, 8000);\n    startupRevealTimer.unref?.();\n\n    // renderer 异常退出时，beforeunload 不一定会运行；由主进程记录原因。`,
+      marker,
+      `${marker}\n\n    // V4_4_58_STARTUP_REVEAL\n    let startupRevealTimer = null;\n    const revealMainWindow = () => {\n        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isVisible()) return;\n        if (startupRevealTimer) {\n            clearTimeout(startupRevealTimer);\n            startupRevealTimer = null;\n        }\n        mainWindow.show();\n    };\n    mainWindow.once('ready-to-show', revealMainWindow);\n    // Never leave the app invisible forever if renderer readiness fails.\n    startupRevealTimer = setTimeout(revealMainWindow, 8000);\n    startupRevealTimer.unref?.();`,
       'ready-to-show startup reveal'
     );
   }
@@ -69,7 +72,7 @@ const syntax = (source, file) => new vm.Script(source, { filename: file });
     src = replaceOnce(
       src,
       `        render();\n        setTimeout(() => loadVoices(false), 2000);\n    });\n})();`,
-      `        render();\n        // Voice discovery is intentionally performed only after this workspace\n        // is opened; it is no longer an unconditional startup network task.\n        await loadVoices(false);\n        initialized = true;\n            } finally {\n                initializing = false;\n            }\n        };\n\n        const lazyTabBtn = document.querySelector('[data-tab="microsoft-tts"]');\n        if (lazyTabBtn) {\n            lazyTabBtn.addEventListener('click', () => {\n                void initMicrosoftTts().catch(error => setStatus('初始化失败：' + error.message));\n            });\n        }\n\n        // If another part of the app restored this panel as the initial view,\n        // initialize it when the browser is idle instead of competing with first paint.\n        const panel = document.getElementById('microsoft-tts-panel');\n        if (panel?.classList.contains('active')) {\n            const schedule = typeof window.requestIdleCallback === 'function'\n                ? cb => window.requestIdleCallback(cb, { timeout: 1800 })\n                : cb => setTimeout(cb, 1200);\n            schedule(() => {\n                void initMicrosoftTts().catch(error => setStatus('初始化失败：' + error.message));\n            });\n        }\n    });\n})();`,
+      `        render();\n        // Voice discovery now belongs to the TTS workspace lifecycle instead of\n        // the application's critical first-paint path.\n        await loadVoices(false);\n        initialized = true;\n            } finally {\n                initializing = false;\n            }\n        };\n\n        const lazyTabBtn = document.querySelector('[data-tab="microsoft-tts"]');\n        if (lazyTabBtn) {\n            lazyTabBtn.addEventListener('click', () => {\n                void initMicrosoftTts().catch(error => setStatus('初始化失败：' + error.message));\n            });\n        }\n\n        // If this workspace was restored as the initial panel, initialize it at\n        // browser idle time instead of competing with first paint.\n        const panel = document.getElementById('microsoft-tts-panel');\n        if (panel?.classList.contains('active')) {\n            const schedule = typeof window.requestIdleCallback === 'function'\n                ? cb => window.requestIdleCallback(cb, { timeout: 1800 })\n                : cb => setTimeout(cb, 1200);\n            schedule(() => {\n                void initMicrosoftTts().catch(error => setStatus('初始化失败：' + error.message));\n            });\n        }\n    });\n})();`,
       'remove eager Microsoft TTS startup work'
     );
   }
@@ -103,6 +106,7 @@ const main = read(files.main);
 const tts = read(files.tts);
 const history = read(files.history);
 const required = [
+  [main, 'V4_4_58_STARTUP_WINDOW_OPTIONS'],
   [main, 'V4_4_58_STARTUP_REVEAL'],
   [main, "show: false"],
   [main, "mainWindow.once('ready-to-show', revealMainWindow)"],

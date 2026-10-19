@@ -18,7 +18,7 @@ if (!alreadyApplied) {
   require('./apply-v4.4.55-batch-import-performance.js');
 } else {
   // The underlying transformation script intentionally targets the pre-4.4.55
-  // source shape.  Do not run it twice in the same npm workspace (npm test then
+  // source shape. Do not run it twice in the same npm workspace (npm test then
   // npm build); validate the already-patched files instead.
   new vm.Script(batch, { filename: batchPath });
   new vm.Script(preload, { filename: preloadPath });
@@ -37,8 +37,8 @@ if (!alreadyApplied) {
   console.log('[4.4.55-batch-import-performance] already applied; idempotent validation passed.');
 }
 
-// Keep the exact-row multi-material drop performance fix in the same lifecycle chain.
 require('./apply-v4.4.56-fast-row-multidrop.js');
-// Selected upstream v4.4.57 integrations are deliberately chained last so they
-// can wire the final patched 4.4.56 Batch Reels source without undoing its performance fixes.
+// Preserve the mature renderer from our branch, then layer only the requested
+// upstream speech-writing extension and selected integrations on top.
+require('./apply-v4.4.57-writing-compat.js');
 require('./apply-v4.4.57-selected-upgrades.js');

@@ -40,10 +40,11 @@ test('Microsoft TTS uses the upgraded native engine, card UI and new API routes'
   assert.match(api, /case 'edge-tts\/create-zip'/);
 });
 
-test('speech-synchronised writing supports split title/body and custom animated cursor images', () => {
+test('speech-synchronised writing is layered onto the existing renderer', () => {
   const html = read('src/index.html');
   const batch = read('src/batch-reels.js');
   const renderer = read('src/reels-canvas-renderer.js');
+  const writing = read('src/reels-speech-writing.js');
   const preload = read('electron/preload.js');
   const style = read('src/reels-style-engine.js');
   for (const id of [
@@ -53,14 +54,17 @@ test('speech-synchronised writing supports split title/body and custom animated 
     'reels-fullpage-typewriter-cursor-kind','reels-fullpage-typewriter-cursor-image-anchor-x',
     'reels-fullpage-typewriter-cursor-image-anchor-y'
   ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /src="reels-speech-writing\.js"/);
   assert.match(batch, /V4_4_57_SPEECH_WRITING_RESOLVER/);
   assert.match(batch, /fullpage_typewriter_split: chk\('reels-fullpage-typewriter-split'\)/);
   assert.match(batch, /getWritingVisualStyle/);
-  assert.match(renderer, /function getSplitWritingParts/);
-  assert.match(renderer, /function getSpeechWritingTokens/);
-  assert.match(renderer, /drawSpeechWritingTip/);
-  assert.match(renderer, /prepareWritingCursorImage/);
-  assert.match(renderer, /ImageDecoder/);
+  assert.match(renderer, /V4_4_57_WRITING_CURSOR_POSITION/);
+  assert.match(renderer, /V4_4_48_GRADIENT_SCOPE_RENDER/);
+  assert.match(renderer, /V4_4_49_CHARACTER_FX_RENDER/);
+  assert.match(writing, /function getSplitWritingParts/);
+  assert.match(writing, /function getSpeechWritingTokens/);
+  assert.match(writing, /prepareWritingCursorImage/);
+  assert.match(writing, /ImageDecoder/);
   assert.match(preload, /V4_4_57_WRITING_CURSOR_IMAGE_BRIDGE/);
   assert.match(preload, /importWritingCursorImage/);
   assert.match(style, /fullpage_typewriter_split: false/);
@@ -78,10 +82,11 @@ test('emergency fixes bind native drop paths before sorting and restore overlay 
   assert.match(overlay, /replace\(\/&\/g, '&amp;'\)/);
 });
 
-test('v4.4.57 remains chained after v4.4.56 and keeps the prior fast-row fix', () => {
+test('v4.4.57 remains chained after v4.4.56 and keeps prior performance fixes', () => {
   const chain = read('scripts/apply-v4.4.55-batch-import-performance-chain.js');
   const table = read('src/reels-batch-table.js');
   assert.match(chain, /apply-v4\.4\.56-fast-row-multidrop\.js/);
+  assert.match(chain, /apply-v4\.4\.57-writing-compat\.js/);
   assert.match(chain, /apply-v4\.4\.57-selected-upgrades\.js/);
   assert.match(table, /V4_4_56_FAST_ROW_BG_DROP/);
   assert.match(table, /_rbtRenderBackgroundCellLight/);

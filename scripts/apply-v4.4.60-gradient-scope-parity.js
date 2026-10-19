@@ -109,14 +109,29 @@ function syntaxCheck(p) {
   syntaxCheck(stylePath);
 }
 
-// v4.4.60 already installs the upstream renderer wholesale. Verify its actual
-// line-vs-word gradient bounds logic remains intact after all chained patches.
+// Keep the fork renderer and adapt its existing v4.4.48 gradient implementation
+// to upstream's line/word vocabulary. In line mode the renderer supplies one shared
+// gradient across the complete line; in word mode it deliberately supplies no shared
+// gradient so _drawWord() recreates the full ramp independently for each word.
 {
   const rendererPath = file('src', 'reels-canvas-renderer.js');
-  const renderer = read(rendererPath);
-  const marker = "const activeGradBounds = (s.text_gradient_scope === 'word') ? wordGradBounds : lineGradBounds;";
-  if (!renderer.includes(marker)) throw new Error('v4.4.60 gradient parity: upstream renderer scope logic missing');
+  let renderer = read(rendererPath);
+
+  renderer = renderer.split("const gradientScope = s.text_gradient_scope === 'word' ? 'word' : 'sentence';")
+    .join("const gradientScope = s.text_gradient_scope === 'word' ? 'word' : 'line';");
+  renderer = renderer.split("gradientScope === 'sentence'").join("gradientScope === 'line'");
+
+  for (const marker of [
+    'V4_4_48_GRADIENT_SCOPE_RENDER',
+    "const gradientScope = s.text_gradient_scope === 'word' ? 'word' : 'line';",
+    "const sharedTextGradient = gradientScope === 'line' ? this._createTextGradient(",
+    "const sharedHighGradient = gradientScope === 'line' ? this._createTextGradient(",
+  ]) {
+    if (!renderer.includes(marker)) throw new Error(`v4.4.60 gradient parity: adapted renderer scope logic missing: ${marker}`);
+  }
+
+  write(rendererPath, renderer);
   syntaxCheck(rendererPath);
 }
 
-console.log('[v4.4.60] T subtitle gradient scope now matches upstream dropdown behavior (line + per-word).');
+console.log('[v4.4.60] T subtitle gradient scope matches upstream line/word behavior on the fork renderer.');

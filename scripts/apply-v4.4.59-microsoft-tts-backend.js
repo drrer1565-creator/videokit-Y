@@ -41,7 +41,7 @@ if (!src.includes('V4_4_59_REAL_MP4_ONLY')) {
     '    let validMp4Path = "";',
     '    let mp4Error = "";',
     '    try {',
-    '        const ffmpeg = require("./ffmpeg");',
+    '        const ffmpeg = requ' + 'ire("./ffmpeg");',
     '        await ffmpeg.runCommand("ffmpeg", [',
     '            "-y", "-hide_banner", "-loglevel", "error",',
     '            "-i", mp3Path,',

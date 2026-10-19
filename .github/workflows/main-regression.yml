@@ -37,5 +37,8 @@ jobs:
       - name: Run v4.4.56 fast row-drop regression
         run: node --test tests/batch-row-drop-v4.4.56-regression.test.js
 
+      - name: Run v4.4.57 selected-upgrade regression
+        run: node --test tests/upstream-selected-v4.4.57-regression.test.js
+
       - name: Build frontend
         run: npm run build

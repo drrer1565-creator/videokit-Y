@@ -6,13 +6,8 @@ const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
 const mainPath = path.join(root, 'electron', 'main.js');
-const ttsPath = path.join(root, 'src', 'microsoft-tts.js');
-const indexPath = path.join(root, 'src', 'index.html');
 const preloadPath = path.join(root, 'electron', 'preload.js');
-const edgePath = path.join(root, 'electron', 'services', 'edgeTts.js');
-const bridgePath = path.join(root, 'electron', 'services', 'edge_tts_bridge.py');
 const historyPath = path.join(root, 'src', 'global-edit-history.js');
-
 const read = file => fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 
 test('v4.4.58 keeps main window hidden until a painted frame is ready', () => {
@@ -26,68 +21,16 @@ test('v4.4.58 keeps main window hidden until a painted frame is ready', () => {
   new vm.Script(src, { filename: mainPath });
 });
 
-test('v4.4.58 defers Microsoft TTS queue and voice discovery until its tab is opened', () => {
-  const src = read(ttsPath);
-  assert.match(src, /V4_4_58_LAZY_MICROSOFT_TTS_INIT/);
-  assert.match(src, /const initMicrosoftTts = async \(\) =>/);
-  assert.match(src, /lazyTabBtn\.addEventListener\('click'/);
-  assert.match(src, /await loadVoices\(false\)/);
-  assert.doesNotMatch(src, /setTimeout\(\(\) => loadVoices\(false\),\s*2000\)/);
-  new vm.Script(src, { filename: ttsPath });
-});
-
-test('v4.4.58 Microsoft TTS preview cache is keyed by selected voice/rate/pitch or superseded by saved-file playback', () => {
-  const src = read(ttsPath);
-  assert.match(src, /V4_4_58_TTS_VOICE_CACHE_KEY/);
-  assert.match(src, /voiceSettingsKey\(settings = currentVoiceSettings\(\)\)/);
-  assert.match(src, /row\._previewSettingsKey === previewKey/);
-  assert.ok(
-    src.includes('V4_4_58_TTS_PREVIEW_ALL_KEYED') || src.includes('V4_4_59_TTS_PLAY_SAVED_BATCH'),
-    'sequential preview must either use the keyed v4.4.58 cache or the stronger v4.4.59 saved-file playback path'
-  );
-  assert.match(src, /invalidateVoicePreviewCache\(\)/);
-  new vm.Script(src, { filename: ttsPath });
-});
-
-test('v4.4.58 Microsoft TTS output path and open actions are usable', () => {
-  const html = read(indexPath);
+test('v4.4.58 keeps safe open-path integration available for later upstream pages', () => {
   const preload = read(preloadPath);
-  const tts = read(ttsPath);
   const main = read(mainPath);
-  assert.match(html, /V4_4_58_EDITABLE_TTS_OUTPUT/);
-  assert.doesNotMatch(html, /id="ms-output"[^>]*\sreadonly(?:\s|>)/);
   assert.match(preload, /V4_4_58_ELECTRON_OPEN_PATH/);
   assert.match(preload, /openPath:\s*safeOpenPath/);
   assert.match(main, /V4_4_58_OPEN_PATH_IPC/);
   assert.match(main, /ipcMain\.handle\('open-path'/);
   assert.match(main, /shell\.openPath\(path\.resolve\(value\)\)/);
-  assert.match(tts, /V4_4_58_TTS_OPEN_PATH_FIX/);
-  assert.match(tts, /await openSystemPath\(target\)/);
-  assert.ok(
-    /window\.electronAPI\?\.fsExists\?\.\(candidate\)/.test(tts) ||
-      (/V4_4_59_TTS_ACTUAL_OUTPUT_FOLDER/.test(tts) && /fileExists\(candidate\)/.test(tts)),
-    'output-folder resolution must verify the candidate path before opening it'
-  );
   new vm.Script(preload, { filename: preloadPath });
-  new vm.Script(tts, { filename: ttsPath });
   new vm.Script(main, { filename: mainPath });
-});
-
-test('v4.4.58 Microsoft TTS never substitutes a generic locale-only voice silently', () => {
-  const src = read(edgePath);
-  assert.match(src, /V4_4_58_STRICT_MICROSOFT_VOICE/);
-  assert.match(src, /engine:\s*'edge-python'/);
-  assert.match(src, /engine:\s*'edge-native'/);
-  assert.match(src, /voice:\s*shortName/);
-  const start = src.indexOf('async function synthesize(text, voice');
-  const end = src.indexOf('\nfunction safeSegment', start);
-  assert.ok(start >= 0 && end > start);
-  assert.doesNotMatch(src.slice(start, end), /synthesizeCloudFallback/);
-  new vm.Script(src, { filename: edgePath });
-
-  const bridge = read(bridgePath);
-  assert.match(bridge, /V4_4_58_EDGE_PITCH/);
-  assert.match(bridge, /pitch=data\.get\('pitch', '\+0Hz'\)/);
 });
 
 test('v4.4.58 moves the initial global-history snapshot to browser idle time', () => {

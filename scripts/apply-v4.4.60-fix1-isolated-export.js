@@ -35,35 +35,43 @@ function syncAboutVersion() {
   write(rel, src);
 }
 
+function findIsolatedScriptList(src) {
+  const endMarker = '].map(name => path.join(scriptBase, name));';
+  let cursor = 0;
+  while (true) {
+    const start = src.indexOf('const scriptPaths = [', cursor);
+    if (start < 0) break;
+    const end = src.indexOf(endMarker, start);
+    if (end < 0) break;
+    const list = src.slice(start, end);
+    if (list.includes("'reels-canvas-renderer.js'") && list.includes("'reels-wysiwyg-export.js'")) {
+      return { start, end, list };
+    }
+    cursor = end + endMarker.length;
+  }
+  throw new Error('v4.4.60-fix1: isolated renderer script list missing');
+}
+
 function patchIsolatedRendererScripts() {
   const rel = 'electron/main.js';
   let src = read(rel);
-  const handlerStart = src.indexOf("ipcMain.handle('isolated-wysiwyg-export'");
-  if (handlerStart < 0) throw new Error('v4.4.60-fix1: isolated WYSIWYG handler missing');
-  const listStart = src.indexOf('const scriptPaths = [', handlerStart);
-  const listEnd = src.indexOf('].map(name => path.join(scriptBase, name));', listStart);
-  if (listStart < 0 || listEnd < 0) throw new Error('v4.4.60-fix1: isolated renderer script list missing');
+  const found = findIsolatedScriptList(src);
 
-  const list = src.slice(listStart, listEnd);
-  if (!list.includes("'reels-speech-writing.js'")) {
+  if (!found.list.includes("'reels-speech-writing.js'")) {
     const marker = "            'reels-canvas-renderer.js',\n            'reels-overlay.js',";
-    if (!list.includes(marker)) {
+    if (!found.list.includes(marker)) {
       throw new Error('v4.4.60-fix1: renderer/export insertion point changed');
     }
     const replacement = "            'reels-canvas-renderer.js',\n            'reels-speech-writing.js',\n            'reels-overlay.js',";
-    const patchedList = list.replace(marker, replacement);
-    src = src.slice(0, listStart) + patchedList + src.slice(listEnd);
+    const patchedList = found.list.replace(marker, replacement);
+    src = src.slice(0, found.start) + patchedList + src.slice(found.end);
     write(rel, src);
   }
 
-  const verified = read(rel);
-  const h = verified.indexOf("ipcMain.handle('isolated-wysiwyg-export'");
-  const s = verified.indexOf('const scriptPaths = [', h);
-  const e = verified.indexOf('].map(name => path.join(scriptBase, name));', s);
-  const scripts = verified.slice(s, e);
-  const canvas = scripts.indexOf("'reels-canvas-renderer.js'");
-  const speech = scripts.indexOf("'reels-speech-writing.js'");
-  const exportEngine = scripts.indexOf("'reels-wysiwyg-export.js'");
+  const verified = findIsolatedScriptList(read(rel)).list;
+  const canvas = verified.indexOf("'reels-canvas-renderer.js'");
+  const speech = verified.indexOf("'reels-speech-writing.js'");
+  const exportEngine = verified.indexOf("'reels-wysiwyg-export.js'");
   if (!(canvas >= 0 && speech > canvas && exportEngine > speech)) {
     throw new Error('v4.4.60-fix1: speech-writing must load after canvas renderer and before WYSIWYG export');
   }

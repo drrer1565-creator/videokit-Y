@@ -51,7 +51,13 @@ test('T-subtitle uppercase mode remains preset-safe and non-destructive under th
   assert.match(batch, /uppercase: chk\('reels-uppercase'\)/);
   assert.match(batch, /setChk\('reels-uppercase', (?:!!)?style\.uppercase\)/);
 
-  assert.match(renderer, /_applyTextTransform\(str, s\) \{/);
-  assert.match(renderer, /if \(s\.uppercase === true \|\| String\(s\.text_transform \|\| ''\)\.toLowerCase\(\) === 'uppercase'\) \{/);
-  assert.match(renderer, /return raw\.toUpperCase\(\);/);
+  // VideoKit-Y implements uppercase as a display-only transform inside its
+  // existing renderer instead of importing the upstream transform helper.
+  // The source segment stays intact so SRT\/TXT text, word timings and old
+  // project data are not mutated.
+  assert.match(renderer, /const segmentText = segment\.edited_text \|\| segment\.text \|\| '';/);
+  assert.match(renderer, /const displaySegmentText = s\.uppercase \? segmentText\.toUpperCase\(\) : segmentText;/);
+  assert.match(renderer, /const text = displaySegmentText;/);
+  assert.match(renderer, /return s\.uppercase \? word\.toUpperCase\(\) : word;/);
+  assert.match(renderer, /const displayText = s\.uppercase \? text\.toUpperCase\(\) : text;/);
 });

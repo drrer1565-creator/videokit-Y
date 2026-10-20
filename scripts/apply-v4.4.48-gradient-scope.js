@@ -24,6 +24,17 @@ function syntax(source, file) {
   new vm.Script(source, { filename: file });
 }
 
+// v4.4.60 migrated the same persisted field to a dropdown. A later build/test
+// invocation must not reinstall the obsolete buttons or look for removed code.
+if (read(batchPath).includes("text_gradient_scope: val('reels-text-gradient-scope') || 'line'")) {
+  if (!read(indexPath).includes('id="reels-text-gradient-scope"')
+      || !read(rendererPath).includes('V4_4_48_GRADIENT_SCOPE_RENDER')) {
+    throw new Error('gradient scope dropdown integration incomplete');
+  }
+  console.log('[4.4.48] superseding line/word gradient control already installed.');
+  return;
+}
+
 // ─────────────────────────────────────────────────────────────
 // index.html: add a two-segment gradient scope switch.
 // Existing projects keep the current whole-sentence behavior by default.

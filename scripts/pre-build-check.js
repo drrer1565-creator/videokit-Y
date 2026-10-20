@@ -38,7 +38,8 @@ function walkDir(dir, filter, results = []) {
         const filePath = path.join(dir, file);
         const stat = fs.statSync(filePath);
         if (stat && stat.isDirectory()) {
-            if (!['node_modules', '.git', 'dist', 'dist-electron', '.codeql-db', 'codeql-db', 'logs', 'vendor'].includes(file)) {
+            // Reference snapshots are intentionally partial and are not runtime modules.
+            if (!['node_modules', '.git', 'dist', 'dist-electron', '.codeql-db', 'codeql-db', 'logs', 'vendor', 'upstream-snapshots'].includes(file)) {
                 walkDir(filePath, filter, results);
             }
         } else {

@@ -70,6 +70,7 @@ test('dependency floors and pinned CI actions are present', () => {
     assert.match(lock, /"node_modules\/http-cache-semantics"[\s\S]*?"version": "4\.3\.0"/);
     assert.match(lock, /"node_modules\/source-map-js"[\s\S]*?"version": "1\.2\.2"/);
     assert.match(req, /-c constraints-security\.txt/);
+    assert.match(req, /edge-tts==7\.3\.1/);
     assert.match(constraints, /multidict>=6\.9\.1,<7/);
 
     for (const rel of [

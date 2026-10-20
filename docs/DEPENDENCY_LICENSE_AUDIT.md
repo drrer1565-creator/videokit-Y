@@ -4,10 +4,10 @@
 
 | 新增直接运行依赖 | 版本 | 许可 | 开源 | 核对依据 |
 |---|---|---|---|---|
-| edge-tts | 7.2.8 | LGPL-3.0（发布元数据标注 LGPLv3） | 是 | PyPI 发布元数据及安装包 LICENSE |
+| edge-tts | 7.3.1 | LGPL-3.0（发布元数据标注 LGPLv3） | 是 | PyPI 发布元数据及安装包 LICENSE |
 
 来源：
-- https://pypi.org/project/edge-tts/7.2.8/
+- https://pypi.org/project/edge-tts/7.3.1/
 - https://github.com/rany2/edge-tts
 - https://github.com/rany2/edge-tts/blob/master/LICENSE
 
@@ -19,7 +19,7 @@ LGPL 依赖可与父项目的 GPL-3.0-only 使用方式兼容。VideoKit 自身�
 
 ## 4.4.40 Windows release
 
-Edge TTS 7.2.8 LGPL-3.0 source: https://pypi.org/project/edge-tts/7.2.8/ . Included as replaceable external Python files with dist-info licenses; bridge is outside app.asar. VIDEOKIT_EDGE_PYTHON can select a replacement interpreter.
+Edge TTS 7.3.1 LGPL-3.0 source: https://pypi.org/project/edge-tts/7.3.1/ . Included as replaceable external Python files with dist-info licenses; bridge is outside app.asar. VIDEOKIT_EDGE_PYTHON can select a replacement interpreter.
 
 Compatible npm security patches retain upstream licenses (Axios and electron-builder/electron-updater: MIT, https://github.com/axios/axios/blob/v1.x/package.json and https://github.com/electron-userland/electron-builder/blob/master/LICENSE). No project-wide relicensing is asserted.
 

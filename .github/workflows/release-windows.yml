@@ -3,8 +3,10 @@ on:
   push:
     tags: ['v*']
     branches: ['main']
-    paths:
-      - '.github/release-4.4.59'
+    paths: ['.github/release-4.4.60']
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -27,6 +29,9 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - name: 🔖 检查发布版本号
+        run: node scripts/check-release-version.js
+
       - name: 🔧 安装 Node 依赖
         run: npm ci
 
@@ -48,8 +53,8 @@ jobs:
       - name: ✅ 运行 v4.4.59 微软语音可靠性回归测试
         run: node --test tests/microsoft-tts-v4.4.59-regression.test.js
 
-      - name: 🔖 同步发布版本号
-        run: npm version 4.4.59 --no-git-tag-version --allow-same-version
+      - name: ✅ 运行 v4.4.60 功能与兼容性回归测试
+        run: node --test tests/upstream-parity-v4.4.60-regression.test.js
 
       - name: 🐍 下载 Python Embedded
         shell: pwsh
@@ -81,6 +86,12 @@ jobs:
           & "vendor/windows/python/python.exe" -c "import edge_tts, yt_dlp; print('Edge TTS runtime OK')"
           Write-Host "✅ Python Embedded 安装完成"
 
+      - name: 🔊 验证 Microsoft TTS 音频与字幕
+        shell: pwsh
+        run: |
+          $env:VIDEOKIT_EDGE_PYTHON = (Resolve-Path 'vendor/windows/python/python.exe').Path
+          node scripts/smoke-microsoft-tts.js
+
       - name: 📥 下载 FFmpeg (Windows)
         shell: pwsh
         run: |
@@ -106,6 +117,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 🔍 检查 Windows 程序和安装包版本
+        shell: pwsh
+        run: |
+          node scripts/check-release-version.js --packaged
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $expectedVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $exeVersion = (Get-Item -LiteralPath 'dist-electron/win-unpacked/VideoKit.exe').VersionInfo.ProductVersion
+          $normalizedExeVersion = $exeVersion -replace '\.0$', ''
+          if ($normalizedExeVersion -ne $expectedVersion) { throw "Executable version $exeVersion (normalized: $normalizedExeVersion) does not match $expectedVersion" }
+          $installer = "dist-electron/VideoKit-Setup-$expectedVersion.exe"
+          if (!(Test-Path -LiteralPath $installer)) { throw "Missing installer: $installer" }
+          if ((Get-Item -LiteralPath $installer).Length -lt 1MB) { throw "Installer is unexpectedly small" }
+
       - name: 📤 上传 Windows 产物
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -122,7 +146,7 @@ jobs:
     name: 📢 创建 GitHub Release
     needs: [build-windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'push')
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
 
     permissions:
       id-token: write
@@ -157,9 +181,9 @@ jobs:
       - name: 🎉 创建 Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.59' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v4.4.60' }}
           target_commitish: ${{ github.sha }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'VideoKit v4.4.59' }}
+          name: VideoKit v4.4.60
           files: all-builds/*
           draft: false
           prerelease: false

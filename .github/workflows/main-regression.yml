@@ -22,8 +22,8 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Sync package version
-        run: npm version 4.4.52 --no-git-tag-version --allow-same-version
+      - name: Verify release version
+        run: node scripts/check-release-version.js
 
       - name: Install dependencies
         run: npm ci
@@ -43,7 +43,10 @@ jobs:
       - name: Run v4.4.58 startup regression
         run: node --test tests/startup-white-screen-v4.4.58-regression.test.js
 
-      - name: Run v4.4.59 Microsoft TTS regression
+      - name: Run v4.4.60 upstream feature parity regression
+        run: node --test tests/upstream-parity-v4.4.60-regression.test.js
+
+      - name: Run Microsoft TTS reliability regression
         run: node --test tests/microsoft-tts-v4.4.59-regression.test.js
 
       - name: Build frontend

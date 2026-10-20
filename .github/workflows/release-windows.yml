@@ -86,6 +86,12 @@ jobs:
           & "vendor/windows/python/python.exe" -c "import edge_tts, yt_dlp; print('Edge TTS runtime OK')"
           Write-Host "✅ Python Embedded 安装完成"
 
+      - name: 🔊 验证 Microsoft TTS 音频与字幕
+        shell: pwsh
+        run: |
+          $env:VIDEOKIT_EDGE_PYTHON = (Resolve-Path 'vendor/windows/python/python.exe').Path
+          node scripts/smoke-microsoft-tts.js
+
       - name: 📥 下载 FFmpeg (Windows)
         shell: pwsh
         run: |

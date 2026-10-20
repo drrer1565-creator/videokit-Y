@@ -326,7 +326,11 @@ function getFullpageWritingTokens(seg, style, direction) {
     const imageCache = new Map();
     async function loadWritingImage(source) {
         if (!source) throw new Error('请先上传出字图片。');
-        if (imageCache.has(source)) return imageCache.get(source);
+        if (imageCache.has(source)) {
+            const cached = imageCache.get(source);
+            await cached.promise;
+            return cached;
+        }
         const entry = { image: null, frames: null, duration: 0, promise: null };
         entry.promise = (async () => {
             if (/\.gif(?:[?#]|$)/i.test(source) && typeof ImageDecoder !== 'undefined' && window.electronAPI?.readWritingCursorImage) {
@@ -336,6 +340,7 @@ function getFullpageWritingTokens(seg, style, direction) {
                 let duration = 0;
                 try {
                     await decoder.tracks.ready;
+                    await decoder.completed;
                     const count = decoder.tracks.selectedTrack?.frameCount || 1;
                     for (let i = 0; i < count; i++) {
                         const decoded = await decoder.decode({ frameIndex: i });
@@ -355,7 +360,12 @@ function getFullpageWritingTokens(seg, style, direction) {
             return entry;
         })();
         imageCache.set(source, entry);
-        await entry.promise;
+        try {
+            await entry.promise;
+        } catch (error) {
+            imageCache.delete(source);
+            throw error;
+        }
         return entry;
     }
 

@@ -258,3 +258,49 @@ test('non-split writing draws the selected tip and respects optional highlight',
   assert.equal(h.calls.filter(call => call.cursor).length, 0);
   assert.equal(h.calls.find(call => call.text).color, '#FFFFFF');
 });
+
+test('export waits for a cursor image already loading in preview and honors its anchor', async () => {
+  const h = writingHarness();
+  let pending, settled = false;
+  h.sandbox.Image = class {
+    constructor() { this.width = 100; this.height = 50; }
+    set src(value) { pending = this; }
+  };
+  const style = { fullpage_typewriter_cursor_kind: 'image',
+    fullpage_typewriter_cursor_image: 'cursor.png',
+    fullpage_typewriter_cursor_image_anchor_x: 25,
+    fullpage_typewriter_cursor_image_anchor_y: 100 };
+  h.renderer._drawSpeechWritingTip(style, { x: 0, y: 0, size: 40 }, 0);
+  const ready = h.renderer.prepareWritingCursorImage(style).then(() => { settled = true; });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(settled, false);
+  pending.onload();
+  await ready;
+  let drawn;
+  h.renderer.ctx.drawImage = (...args) => { drawn = args; };
+  h.renderer._drawSpeechWritingTip(style, { x: 0, y: 0, size: 40 }, 0);
+  assert.deepEqual(drawn.slice(1), [-10, -20, 40, 20]);
+});
+
+test('GIF cursor export selects decoded frames using video time', async () => {
+  const h = writingHarness();
+  const closed = [];
+  h.sandbox.electronAPI = { readWritingCursorImage: () => new Uint8Array([1]) };
+  h.sandbox.ImageDecoder = class {
+    tracks = { ready: Promise.resolve(), selectedTrack: { frameCount: 2 } };
+    completed = Promise.resolve();
+    async decode({ frameIndex }) {
+      return { image: { width: 20, height: 20, index: frameIndex, duration: 100000, close: () => closed.push(frameIndex) } };
+    }
+    close() { closed.push('decoder'); }
+  };
+  h.sandbox.createImageBitmap = async image => ({ width: 20, height: 20, index: image.index });
+  const style = { fullpage_typewriter_cursor_kind: 'image', fullpage_typewriter_cursor_image: 'cursor.gif' };
+  await h.renderer.prepareWritingCursorImage(style);
+  const frames = [];
+  h.renderer.ctx.drawImage = image => frames.push(image.index);
+  for (const time of [0, 0.15, 0.25]) h.renderer._drawSpeechWritingTip(style, { x: 0, y: 0, size: 20 }, time);
+  assert.deepEqual(frames, [0, 1, 0]);
+  assert.deepEqual(closed, [0, 1, 'decoder']);
+});

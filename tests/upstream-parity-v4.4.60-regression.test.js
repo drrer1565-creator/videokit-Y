@@ -49,11 +49,17 @@ test('v4.4.60 Microsoft TTS UI is byte-for-byte the upstream v4.4.43-fix panel',
   }
 });
 
-test('v4.4.60 Microsoft TTS frontend and native Edge engine are exact upstream implementations', () => {
+test('v4.4.60 Microsoft TTS frontend and native Edge engine expose the integrated workflow', () => {
   const client = cur('src', 'microsoft-tts.js');
   const engine = cur('electron', 'services', 'edgeTts.js');
-  assert.equal(client, up('src', 'microsoft-tts.js'));
-  assert.equal(engine, up('electron', 'services', 'edgeTts.js'));
+  for (const capability of ['V4_4_59_TTS_POLISH', 'V4_4_59_TTS_RESUMABLE_BATCH', 'V4_4_59_TTS_PLAY_SAVED_BATCH']) {
+    assert.ok(client.includes(capability), `fork TTS capability missing: ${capability}`);
+  }
+  for (const route of ['edge-tts/preview', 'edge-tts/save-item', 'edge-tts/create-zip']) {
+    assert.ok(client.includes(route), `TTS workflow route missing: ${route}`);
+  }
+  assert.match(engine, /module\.exports/);
+  assert.doesNotMatch(engine, /copyFile\(mp3Path,\s*mp4Path\)/);
   new vm.Script(client, { filename: 'src/microsoft-tts.js' });
   new vm.Script(engine, { filename: 'electron/services/edgeTts.js' });
 });
@@ -155,4 +161,100 @@ test('v4.4.60 keeps required integration bridges and existing batch-performance 
   assert.match(table, /V4_4_55_BATCH_IMPORT_REFRESH_GUARD/);
   assert.match(table, /V4_4_56_FAST_ROW_BG_DROP/);
   assert.match(table, /_rbtRenderBackgroundCellLight/);
+});
+
+function writingHarness() {
+  const calls = [];
+  const ctx = new Proxy({
+    measureText: text => ({ width: Array.from(text).length * 10 }),
+    fillText: text => calls.push({ cursor: text }),
+  }, { get: (target, key) => key in target ? target[key] : () => {} });
+  const sandbox = { console, Intl, Path2D: class {}, document: { createElement: () => ({ getContext: () => ctx }) } };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(cur('src', 'reels-canvas-renderer.js'), sandbox);
+  vm.runInContext(cur('src', 'reels-speech-writing.js'), sandbox);
+  const renderer = new sandbox.ReelsCanvasRenderer({ getContext: () => ctx });
+  renderer._drawWord = (_ctx, text, _x, _y, color) => calls.push({ text, color });
+  const render = (segments, style, time, script = '') => {
+    calls.length = 0;
+    renderer.setContextSegments(segments, script);
+    renderer._renderFullpageTypewriter({
+      fullpage_typewriter: true, fullpage_typewriter_reveal_type: 'char',
+      fontsize: 40, color_text: '#FFFFFF', color_high: '#FFD700',
+      ...style,
+    }, time, 1080, 1920);
+    return calls.filter(call => call.text).map(call => call.text).join('');
+  };
+  return { sandbox, renderer, render, calls };
+}
+
+test('fullpage renderer uses speech timestamps, supports opt-out and preserves source text', () => {
+  const h = writingHarness();
+  const segments = [{ text: 'ab cd', start: 0, end: 10, words: [
+    { word: 'ab', start: 0, end: 1 }, { word: 'cd', start: 8, end: 10 },
+  ] }];
+  const before = JSON.stringify(segments);
+  assert.equal(h.render(segments, { uppercase: true }, 4).trim(), 'AB');
+  assert.equal(h.render(segments, { fullpage_typewriter_speech_sync: false }, 6).trim(), 'ab c');
+  assert.equal(JSON.stringify(segments), before);
+  assert.equal(h.renderer._contextSegments, segments);
+});
+
+test('fullpage renderer reveals whole sentences and complete Unicode graphemes', () => {
+  const h = writingHarness();
+  const segments = [{ text: 'Hi there. Bye now.', start: 0, end: 10, words: [
+    { word: 'Hi', start: 0, end: 1 }, { word: 'there', start: 1, end: 3 },
+    { word: 'Bye', start: 6, end: 7 }, { word: 'now', start: 8, end: 10 },
+  ] }];
+  assert.equal(h.render(segments, { fullpage_typewriter_reveal_type: 'sentence' }, 1).trim(), 'Hi there.');
+  assert.equal(h.render([{ text: '👩‍💻e\u0301', start: 0, end: 2 }], {}, 0.1), '👩‍💻');
+  assert.equal(h.render([{ text: 'ab', edited_text: 'XY', start: 0, end: 2,
+    words: [{ word: 'ab', start: 0, end: 1 }] }], { fullpage_typewriter_reveal_type: 'word' }, 1), 'XY');
+});
+
+test('collapsed trailing cues get display timing without altering saved segments or words', () => {
+  const h = writingHarness();
+  const segments = [{ text: 'abcd', start: 0, end: 4 }, { text: 'ef', start: 4, end: 4,
+    words: [{ word: 'ef', start: 4, end: 4 }] }];
+  const before = JSON.stringify(segments);
+  assert.equal(h.render(segments, {}, 4.1).trim(), 'abcd e');
+  const repaired = h.sandbox.repairCollapsedWritingSegments(segments);
+  assert.equal(repaired[0], segments[0]);
+  assert.equal(repaired[1].end, 6);
+  assert.equal(repaired[1].words[0].end, 6);
+  assert.equal(JSON.stringify(segments), before);
+  const internalGap = [segments[1], { text: 'valid', start: 5, end: 8 }];
+  assert.equal(h.sandbox.repairCollapsedWritingSegments(internalGap), internalGap);
+});
+
+test('split writing uses the original-script boundary and keeps custom headings separate from narration', () => {
+  const h = writingHarness();
+  const segments = [{ text: 'Hello there Body text', start: 0, end: 8, words: [
+    { word: 'Hello', start: 0, end: 1 }, { word: 'there', start: 1, end: 2 },
+    { word: 'Body', start: 4, end: 5 }, { word: 'text', start: 6, end: 8 },
+  ] }];
+  const before = JSON.stringify(segments);
+  const parts = h.sandbox.getSplitWritingParts(segments, {
+    fullpage_typewriter_title_auto: false, fullpage_typewriter_title_text: 'Custom heading',
+  }, 'Hello there. Body text.');
+  assert.equal(parts.title[0].text, 'Custom heading');
+  assert.equal(parts.body[0].text, 'Body text');
+  assert.equal(parts.body[0].start, 4);
+  h.render(segments, { fullpage_typewriter_split: true, fullpage_typewriter_cursor: true }, 0.1, 'Hello there. Body text.');
+  assert.equal(h.calls.filter(call => call.cursor === '|').length, 1);
+  assert.equal(h.renderer._contextSegments, segments);
+  assert.equal(JSON.stringify(segments), before);
+});
+
+test('non-split writing draws the selected tip and respects optional highlight', () => {
+  const h = writingHarness();
+  let tips = 0;
+  h.renderer._drawSpeechWritingTip = () => tips++;
+  h.render([{ text: 'hello', start: 0, end: 5 }], {
+    fullpage_typewriter_cursor: true, fullpage_typewriter_cursor_kind: 'quill', highlight_enabled: false,
+  }, 0.1);
+  assert.equal(tips, 1);
+  assert.equal(h.calls.filter(call => call.cursor).length, 0);
+  assert.equal(h.calls.find(call => call.text).color, '#FFFFFF');
 });

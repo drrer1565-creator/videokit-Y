@@ -42,7 +42,7 @@ require('./apply-v4.4.58-microsoft-tts-reliability.js');
 require('./apply-v4.4.59-microsoft-tts-frontend.js');
 require('./apply-v4.4.59-microsoft-tts-polish.js');
 require('./apply-v4.4.59-microsoft-tts-backend.js');
-// v4.4.60 must run last: it restores exact upstream UI/logic after legacy compatibility patches.
+// v4.4.60 runs last to adapt the feature UI/behavior while preserving fork features.
 require('./apply-v4.4.60-upstream-parity.js');
 // The original author's gradient-scope control is a line/word dropdown, not the older fork segmented switch.
 require('./apply-v4.4.60-gradient-scope-parity.js');

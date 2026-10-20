@@ -73,7 +73,8 @@ function syntaxCheck(p) {
   new vm.Script(read(p), { filename: p });
 }
 
-// 1) Microsoft TTS: upstream v4.4.43-fix is the source of truth for both UI and behavior.
+// 1) Microsoft TTS: migrate the panel while preserving the fork's later
+// playback/cache/retry and real-MP4/strict-ZIP fixes.
 {
   const indexPath = file('src', 'index.html');
   let current = read(indexPath);
@@ -87,8 +88,14 @@ function syntaxCheck(p) {
   );
   write(indexPath, current);
 
-  write(file('src', 'microsoft-tts.js'), read(up('src', 'microsoft-tts.js')));
-  write(file('electron', 'services', 'edgeTts.js'), read(up('electron', 'services', 'edgeTts.js')));
+  for (const [p, markers] of [
+    [file('src', 'microsoft-tts.js'), ['V4_4_59_TTS_POLISH', 'V4_4_59_TTS_RESUMABLE_BATCH', 'V4_4_59_TTS_PLAY_SAVED_BATCH']],
+    [file('electron', 'services', 'edgeTts.js'), ['V4_4_58_STRICT_MICROSOFT_VOICE', 'V4_4_59_REAL_MP4_ONLY', 'V4_4_59_STRICT_ZIP_INPUTS']],
+  ]) {
+    for (const marker of markers) {
+      if (!read(p).includes(marker)) throw new Error(`v4.4.60 TTS compatibility missing: ${marker}`);
+    }
+  }
   syntaxCheck(file('src', 'microsoft-tts.js'));
   syntaxCheck(file('electron', 'services', 'edgeTts.js'));
 }
@@ -114,7 +121,7 @@ function syntaxCheck(p) {
 // require the compatibility layers that the upstream writing behavior is integrated on top of.
 {
   const rendererPath = file('src', 'reels-canvas-renderer.js');
-  const renderer = read(rendererPath);
+  let renderer = read(rendererPath);
   const requiredForkMarkers = [
     'V4_4_57_WRITING_CURSOR_POSITION',
     'V4_4_48_GRADIENT_SCOPE_RENDER',
@@ -128,6 +135,42 @@ function syntaxCheck(p) {
   ];
   for (const marker of requiredForkMarkers) {
     if (!renderer.includes(marker)) throw new Error(`v4.4.60 renderer compatibility missing: ${marker}`);
+  }
+  if (!renderer.includes('V4_4_60_WRITING_TIMING')) {
+    const start = '    _renderFullpageTypewriter(s, currentTime, videoW, videoH) {';
+    const end = '    _getScatterGroups(';
+    const before = extractRange(renderer, start, end, 'fork fullpage renderer');
+    let writing = before.replace(start, `${start}
+        // V4_4_60_WRITING_TIMING: keep fork layout/drawing and adapt only writing behavior.
+        this._writingTipPosition = null;
+        if (s._writingPart && !(this._contextSegments || []).some(seg => Number(seg.start) <= currentTime)) return;`);
+    const oldTokens = extractRange(writing, '            const segTokens = [];', '            // Insert spacing between segments if needed', 'writing tokens');
+    writing = writing.replace(oldTokens, `            const segTokens = getFullpageWritingTokens(seg, s, textDirection);
+
+`);
+    writing = writing.replace('const borderW = s.border_width || 3;', 'const borderW = s.border_width ?? 3;')
+      .replace('const outlineAlpha = 1.0;', 'const outlineAlpha = (s.opacity_outline ?? 255) / 255;')
+      .replace("color = s.color_high || '#FFD700';", "color = s.highlight_enabled === false || tok._sentenceToken ? (s.color_text || '#FFFFFF') : (s.color_high || '#FFD700');");
+    const cursorStart = writing.indexOf('        // 6. Draw blinking cursor.');
+    if (cursorStart < 0) throw new Error('v4.4.60 writing cursor integration missing');
+    writing = writing.slice(0, cursorStart) + `        // Split rendering draws one shared cursor after both parts.
+        if (s.fullpage_typewriter_cursor && !s._writingDeferCursor && this._writingTipPosition) {
+            if (isImageOrVectorWritingTip(s.fullpage_typewriter_cursor_kind)) {
+                this._drawSpeechWritingTip(s, this._writingTipPosition, currentTime);
+            } else if (Math.floor(currentTime * 2) % 2 === 0) {
+                ctx.save();
+                ctx.fillStyle = s.fullpage_typewriter_cursor_color || '#FFD700';
+                ctx.font = getLineFontStr(activeLineIdx);
+                ctx.fillText(s.fullpage_typewriter_cursor_char || '|', cursorX, cursorY);
+                ctx.restore();
+            }
+        }
+        ctx.restore();
+    }
+
+`;
+    renderer = renderer.replace(before, writing);
+    write(rendererPath, renderer);
   }
   syntaxCheck(rendererPath);
 }
@@ -151,6 +194,8 @@ function syntaxCheck(p) {
   if (!current.includes('V4_4_57_SPEECH_WRITING_RESOLVER')) {
     current = current.replace('function _resolveSubtitleStyleForTask(task) {', '// V4_4_57_SPEECH_WRITING_RESOLVER\nfunction _resolveSubtitleStyleForTask(task) {');
   }
+  current = current.replace('renderer.setContextSegments(_selectedTask.segments);',
+    "renderer.setContextSegments(_selectedTask.segments, _selectedTask.ttsText || _selectedTask.aiScript || '');");
 
   current = replaceNthRanges(
     current,
@@ -234,10 +279,14 @@ for (const rel of [['src','reels-wysiwyg-export.js'], ['src','reels-layered-expo
   if (src.includes(sig) && !src.includes(`${sig}\n    params={...params,style:getWritingVisualStyle(params.style)};`)) {
     src = src.replace(sig, `${sig}\n    params={...params,style:getWritingVisualStyle(params.style)};`);
   }
-  src = src.replace(/subtitleRenderer\.setContextSegments\(segments\);/g, 'subtitleRenderer.setContextSegments(segments, originalScript);');
+  src = src.replace(/\b(renderer|subtitleRenderer)\.setContextSegments\(segments\);/g, '$1.setContextSegments(segments, originalScript);');
   const rendererMarker = '    const renderer = new ReelsCanvasRenderer(canvas);';
   if (src.includes(rendererMarker) && !src.includes('await renderer.prepareWritingCursorImage(style)')) {
     src = src.replace(rendererMarker, `${rendererMarker}\n    if (typeof renderer.prepareWritingCursorImage === 'function') await renderer.prepareWritingCursorImage(style);`);
+  }
+  const subtitleMarker = '    const subtitleRenderer = new ReelsCanvasRenderer(subtitleCanvas);';
+  if (src.includes(subtitleMarker) && !src.includes('await subtitleRenderer.prepareWritingCursorImage(style)')) {
+    src = src.replace(subtitleMarker, `${subtitleMarker}\n    if (typeof subtitleRenderer.prepareWritingCursorImage === 'function') await subtitleRenderer.prepareWritingCursorImage(style);`);
   }
   write(p, src);
   syntaxCheck(p);

@@ -6,16 +6,25 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n?/g, '\n');
 
+function findIsolatedScriptList(src) {
+  const endMarker = '].map(name => path.join(scriptBase, name));';
+  let cursor = 0;
+  while (true) {
+    const start = src.indexOf('const scriptPaths = [', cursor);
+    if (start < 0) break;
+    const end = src.indexOf(endMarker, start);
+    if (end < 0) break;
+    const list = src.slice(start, end);
+    if (list.includes("'reels-canvas-renderer.js'") && list.includes("'reels-wysiwyg-export.js'")) return list;
+    cursor = end + endMarker.length;
+  }
+  return '';
+}
+
 test('isolated WYSIWYG renderer loads speech-writing before export engine', () => {
-  const main = read('electron/main.js');
-  const handlerStart = main.indexOf("ipcMain.handle('isolated-wysiwyg-export'");
-  assert.ok(handlerStart >= 0, 'isolated export handler missing');
+  const scripts = findIsolatedScriptList(read('electron/main.js'));
+  assert.ok(scripts, 'isolated renderer script list missing');
 
-  const listStart = main.indexOf('const scriptPaths = [', handlerStart);
-  const listEnd = main.indexOf('].map(name => path.join(scriptBase, name));', listStart);
-  assert.ok(listStart >= 0 && listEnd > listStart, 'isolated renderer script list missing');
-
-  const scripts = main.slice(listStart, listEnd);
   const canvas = scripts.indexOf("'reels-canvas-renderer.js'");
   const speech = scripts.indexOf("'reels-speech-writing.js'");
   const wysiwyg = scripts.indexOf("'reels-wysiwyg-export.js'");

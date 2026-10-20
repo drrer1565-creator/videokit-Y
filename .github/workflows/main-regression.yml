@@ -22,6 +22,9 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Apply v4.4.60-fix1 hotfix preparation
+        run: node scripts/apply-v4.4.60-fix1-isolated-export.js
+
       - name: Verify release version
         run: node scripts/check-release-version.js
 
@@ -45,6 +48,9 @@ jobs:
 
       - name: Run v4.4.60 upstream feature parity regression
         run: node --test tests/upstream-parity-v4.4.60-regression.test.js
+
+      - name: Run v4.4.60-fix1 isolated export regression
+        run: node --test tests/isolated-export-v4.4.60-fix1-regression.test.js
 
       - name: Run Microsoft TTS reliability regression
         run: node --test tests/microsoft-tts-v4.4.59-regression.test.js

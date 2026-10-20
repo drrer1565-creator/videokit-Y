@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 const lock = JSON.parse(read('package-lock.json'));
-assert.equal(pkg.version, '4.4.60', 'Unexpected release version');
+assert.equal(pkg.version, '4.4.60-fix1', 'Unexpected release version');
 assert.equal(lock.version, pkg.version, 'Lockfile version mismatch');
 assert.equal(lock.packages[''].version, pkg.version, 'Lockfile root package version mismatch');
 assert.ok(read('src/index.html').includes(`id="app-version-display">v${pkg.version}</span>`), 'About fallback version mismatch');

@@ -1,0 +1,3 @@
+VideoKit v4.4.60-fix1
+
+Hotfix for isolated WYSIWYG batch export: load reels-speech-writing.js after reels-canvas-renderer.js and before reels-wysiwyg-export.js so getWritingVisualStyle and related writing helpers are available in the background renderer.

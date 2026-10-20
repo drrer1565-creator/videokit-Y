@@ -155,10 +155,10 @@ test('scrolling overlay uppercase and letter spacing sync immediately', () => {
   assert.ok(src.includes("ov.scroll_letter_spacing = this._get('rop-scroll-letterspacing')"));
 });
 
-test('package and lockfile versions are 4.4.60', () => {
+test('package and lockfile versions match the v4.4.60 hotfix line', () => {
   const pkg = JSON.parse(read('package.json'));
   const lock = JSON.parse(read('package-lock.json'));
-  assert.equal(pkg.version, '4.4.60');
+  assert.match(pkg.version, /^4\.4\.60(?:-fix\d+)?$/);
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages[''].version, pkg.version);
 });

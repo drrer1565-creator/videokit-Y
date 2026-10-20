@@ -124,7 +124,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $expectedVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $exeVersion = (Get-Item -LiteralPath 'dist-electron/win-unpacked/VideoKit.exe').VersionInfo.ProductVersion
-          if ($exeVersion -ne $expectedVersion) { throw "Executable version $exeVersion does not match $expectedVersion" }
+          $normalizedExeVersion = $exeVersion -replace '\.0$', ''
+          if ($normalizedExeVersion -ne $expectedVersion) { throw "Executable version $exeVersion (normalized: $normalizedExeVersion) does not match $expectedVersion" }
           $installer = "dist-electron/VideoKit-Setup-$expectedVersion.exe"
           if (!(Test-Path -LiteralPath $installer)) { throw "Missing installer: $installer" }
           if ((Get-Item -LiteralPath $installer).Length -lt 1MB) { throw "Installer is unexpectedly small" }
